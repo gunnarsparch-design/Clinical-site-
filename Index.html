@@ -267,9 +267,17 @@
 
         // --- Core Application State & Logic ---
         
+        const tabs = ['home', 'patientEntry', 'receiving', 'station', 'archive', 'contact'];
+        
+        // Load initial state from localStorage or use defaults
+        const savedLang = localStorage.getItem('samsAppLanguage');
+        const savedTab = localStorage.getItem('samsAppActiveTab');
+
         let currentState = {
-            language: 'en', // 'en' or 'de'
-            activeTab: 'home' // 'home', 'patientEntry', 'receiving', 'station', 'archive', 'contact'
+            // Load language, default to 'en' if not found or invalid
+            language: (savedLang && dictionary[savedLang]) ? savedLang : 'en', 
+            // Load active tab, default to 'home' if not found or invalid
+            activeTab: (savedTab && tabs.includes(savedTab)) ? savedTab : 'home'
         };
         
         // State for the modal
@@ -296,7 +304,6 @@
         let isAuthReady = false;
         let useMockDb = false;
 
-        const tabs = ['home', 'patientEntry', 'receiving', 'station', 'archive', 'contact'];
         
         // Utility to format date to YYYY-MM-DD
         const getTodayDateString = () => {
@@ -318,7 +325,8 @@
                     patientEntry: "Patient Entry",
                     receiving: "Receiving",
                     station: "Station View",
-                    archive: "Archive"
+                    archive: "Archive",
+                    contact: "Contact"
                 },
                 home: {
                     heading: "Welcome to SAMS Intake System",
@@ -330,10 +338,10 @@
                     nameLabel: "Patient Full Name",
                     dobLabel: "Date of Birth (DOB)",
                     complaintLabel: "Chief Complaint (Symptoms/Injury)",
-                    vitalsHeading: "Initial Vitals", // New
-                    bpmLabel: "BPM (Heart Rate)", // New
-                    bpLabel: "Blood Pressure (Sys/Dia)", // New
-                    paramedicLabel: "Paramedic/Sending Team Name", // New
+                    vitalsHeading: "Initial Vitals", 
+                    bpmLabel: "BPM (Heart Rate)", 
+                    bpLabel: "Blood Pressure (Sys/Dia)", 
+                    paramedicLabel: "Paramedic/Sending Team Name", 
                     priorityLabel: "Triage Priority",
                     priorities: { low: "Low (Scheduled/Stable)", medium: "Medium (Urgent)", high: "High (Critical)" },
                     submitBtn: "Log Patient Entry",
@@ -349,8 +357,8 @@
                     complaint: "Complaint:",
                     time: "Time:",
                     submitter: "Submitted by:",
-                    vitals: "Vitals:", // New
-                    paramedic: "Paramedic:", // New
+                    vitals: "Vitals:", 
+                    paramedic: "Paramedic:", 
                 },
                 station: {
                     heading: "Active Patients (Assigned Station)",
@@ -364,8 +372,8 @@
                     assigned: "Assigned:",
                     assignBtn: "Assign Staff",
                     unassigned: "Unassigned",
-                    vitals: "Vitals:", // New
-                    paramedic: "Paramedic:", // New
+                    vitals: "Vitals:", 
+                    paramedic: "Paramedic:", 
                 },
                 archive: {
                     heading: "Archived/Discharged Patients",
@@ -378,8 +386,8 @@
                     dischargeDate: "Discharge Date:", 
                     submitter: "Triage/Assignment by:", 
                     cleared: "Archive cleared successfully.",
-                    vitals: "Vitals:", // New
-                    paramedic: "Paramedic:", // New
+                    vitals: "Vitals:", 
+                    paramedic: "Paramedic:", 
                 },
                 contact: {
                     heading: "Contact Us",
@@ -425,10 +433,10 @@
                     nameLabel: "Voller Name des Patienten",
                     dobLabel: "Geburtsdatum (Geb.)",
                     complaintLabel: "Hauptbeschwerde (Symptome/Verletzung)",
-                    vitalsHeading: "Anfangsvitalwerte", // New
-                    bpmLabel: "BPM (Herzfrequenz)", // New
-                    bpLabel: "Blutdruck (Sys/Dia)", // New
-                    paramedicLabel: "Name des Notarztes/Teams", // New
+                    vitalsHeading: "Anfangsvitalwerte", 
+                    bpmLabel: "BPM (Herzfrequenz)", 
+                    bpLabel: "Blutdruck (Sys/Dia)", 
+                    paramedicLabel: "Name des Notarztes/Teams", 
                     priorityLabel: "Triage-Priorität",
                     priorities: { low: "Niedrig (Geplant/Stabil)", medium: "Mittel (Dringend)", high: "Hoch (Kritisch)" },
                     submitBtn: "Patienteneintrag Protokollieren",
@@ -444,8 +452,8 @@
                     complaint: "Beschwerde:",
                     time: "Zeit:",
                     submitter: "Eingereicht von:",
-                    vitals: "Vitalwerte:", // New
-                    paramedic: "Notarzt/Team:", // New
+                    vitals: "Vitalwerte:", 
+                    paramedic: "Notarzt/Team:", 
                 },
                 station: {
                     heading: "Aktive Patienten (Zugewiesene Station)",
@@ -459,8 +467,8 @@
                     assigned: "Zugewiesen:",
                     assignBtn: "Mitarbeiter Zuweisen",
                     unassigned: "Nicht Zugewiesen",
-                    vitals: "Vitalwerte:", // New
-                    paramedic: "Notarzt/Team:", // New
+                    vitals: "Vitalwerte:", 
+                    paramedic: "Notarzt/Team:", 
                 },
                 archive: {
                     heading: "Archivierte/Entlassene Patienten",
@@ -473,8 +481,8 @@
                     dischargeDate: "Entlassungsdatum:",
                     submitter: "Triage/Zuweisung durch:",
                     cleared: "Archiv erfolgreich gelöscht.",
-                    vitals: "Vitalwerte:", // New
-                    paramedic: "Notarzt/Team:", // New
+                    vitals: "Vitalwerte:", 
+                    paramedic: "Notarzt/Team:", 
                 },
                 contact: {
                     heading: "Kontaktieren Sie uns",
@@ -784,6 +792,8 @@
         window.setTab = function(tabId) {
             if (currentState.activeTab !== tabId) {
                 currentState.activeTab = tabId;
+                // PERSISTENCE: Save the active tab to local storage
+                localStorage.setItem('samsAppActiveTab', tabId); 
                 render();
             }
         };
@@ -793,6 +803,8 @@
          */
         function toggleLanguage() {
             currentState.language = currentState.language === 'en' ? 'de' : 'en';
+            // PERSISTENCE: Save the language to local storage
+            localStorage.setItem('samsAppLanguage', currentState.language);
             render();
         }
 
