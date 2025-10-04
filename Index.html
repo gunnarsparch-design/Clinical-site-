@@ -104,6 +104,7 @@
                 </h2>
                 
                 <form id="patient-entry-form" class="space-y-4 max-w-lg mx-auto">
+                    <!-- Patient Details -->
                     <div>
                         <label for="p-name" id="p-name-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
                         <input type="text" id="p-name" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
@@ -116,12 +117,38 @@
                         <label for="p-complaint" id="p-complaint-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
                         <textarea id="p-complaint" rows="3" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500"></textarea>
                     </div>
-                    <div>
-                        <label for="p-priority" id="p-priority-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                        <select id="p-priority" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 bg-white">
-                            <!-- Options populated by JS render function -->
-                        </select>
+
+                    <!-- Vitals Section (New) -->
+                    <div class="pt-4 border-t border-gray-200">
+                        <h3 id="vitals-heading" class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                            <span data-lucide="heart-pulse" class="w-5 h-5 mr-2 text-red-500"></span>
+                        </h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="p-bpm" id="p-bpm-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                                <input type="number" id="p-bpm" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="e.g. 85">
+                            </div>
+                            <div>
+                                <label for="p-bp" id="p-bp-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                                <input type="text" id="p-bp" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="e.g. 120/80">
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- Paramedic & Priority Section -->
+                    <div class="pt-4 border-t border-gray-200 space-y-4">
+                        <div>
+                            <label for="p-paramedic" id="p-paramedic-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                            <input type="text" id="p-paramedic" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" placeholder="e.g. EMT Smith / Ambulance Team 4">
+                        </div>
+                        <div>
+                            <label for="p-priority" id="p-priority-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                            <select id="p-priority" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 bg-white">
+                                <!-- Options populated by JS render function -->
+                            </select>
+                        </div>
+                    </div>
+
                     <button type="submit" id="patientEntry-submit-btn" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition duration-200 shadow-md"></button>
                     <div id="patient-message-box" class="mt-4 p-3 rounded-lg text-center hidden" role="alert"></div>
                 </form>
@@ -303,6 +330,10 @@
                     nameLabel: "Patient Full Name",
                     dobLabel: "Date of Birth (DOB)",
                     complaintLabel: "Chief Complaint (Symptoms/Injury)",
+                    vitalsHeading: "Initial Vitals", // New
+                    bpmLabel: "BPM (Heart Rate)", // New
+                    bpLabel: "Blood Pressure (Sys/Dia)", // New
+                    paramedicLabel: "Paramedic/Sending Team Name", // New
                     priorityLabel: "Triage Priority",
                     priorities: { low: "Low (Scheduled/Stable)", medium: "Medium (Urgent)", high: "High (Critical)" },
                     submitBtn: "Log Patient Entry",
@@ -318,6 +349,8 @@
                     complaint: "Complaint:",
                     time: "Time:",
                     submitter: "Submitted by:",
+                    vitals: "Vitals:", // New
+                    paramedic: "Paramedic:", // New
                 },
                 station: {
                     heading: "Active Patients (Assigned Station)",
@@ -330,7 +363,9 @@
                     submitter: "Triage/Assignment by:",
                     assigned: "Assigned:",
                     assignBtn: "Assign Staff",
-                    unassigned: "Unassigned"
+                    unassigned: "Unassigned",
+                    vitals: "Vitals:", // New
+                    paramedic: "Paramedic:", // New
                 },
                 archive: {
                     heading: "Archived/Discharged Patients",
@@ -339,10 +374,12 @@
                     priority: "Priority:",
                     complaint: "Complaint:",
                     time: "Archived:",
-                    dischargedBy: "Discharged by:", // New label
-                    dischargeDate: "Discharge Date:", // New label
-                    submitter: "Triage/Assignment by:", // Use previous submitter for context
-                    cleared: "Archive cleared successfully."
+                    dischargedBy: "Discharged by:", 
+                    dischargeDate: "Discharge Date:", 
+                    submitter: "Triage/Assignment by:", 
+                    cleared: "Archive cleared successfully.",
+                    vitals: "Vitals:", // New
+                    paramedic: "Paramedic:", // New
                 },
                 contact: {
                     heading: "Contact Us",
@@ -354,7 +391,7 @@
                     messagePlaceholder: "Your Message",
                     submitBtn: "Send Message",
                 },
-                modal: { // NEW MODAL CONTENT
+                modal: { 
                     title: "Confirm Patient Discharge",
                     staffLabel: "Staff Name (Doctor/Nurse)",
                     dateLabel: "Discharge Date",
@@ -388,6 +425,10 @@
                     nameLabel: "Voller Name des Patienten",
                     dobLabel: "Geburtsdatum (Geb.)",
                     complaintLabel: "Hauptbeschwerde (Symptome/Verletzung)",
+                    vitalsHeading: "Anfangsvitalwerte", // New
+                    bpmLabel: "BPM (Herzfrequenz)", // New
+                    bpLabel: "Blutdruck (Sys/Dia)", // New
+                    paramedicLabel: "Name des Notarztes/Teams", // New
                     priorityLabel: "Triage-Priorität",
                     priorities: { low: "Niedrig (Geplant/Stabil)", medium: "Mittel (Dringend)", high: "Hoch (Kritisch)" },
                     submitBtn: "Patienteneintrag Protokollieren",
@@ -403,6 +444,8 @@
                     complaint: "Beschwerde:",
                     time: "Zeit:",
                     submitter: "Eingereicht von:",
+                    vitals: "Vitalwerte:", // New
+                    paramedic: "Notarzt/Team:", // New
                 },
                 station: {
                     heading: "Aktive Patienten (Zugewiesene Station)",
@@ -415,7 +458,9 @@
                     submitter: "Triage/Zuweisung durch:",
                     assigned: "Zugewiesen:",
                     assignBtn: "Mitarbeiter Zuweisen",
-                    unassigned: "Nicht Zugewiesen"
+                    unassigned: "Nicht Zugewiesen",
+                    vitals: "Vitalwerte:", // New
+                    paramedic: "Notarzt/Team:", // New
                 },
                 archive: {
                     heading: "Archivierte/Entlassene Patienten",
@@ -427,7 +472,9 @@
                     dischargedBy: "Entlassen durch:",
                     dischargeDate: "Entlassungsdatum:",
                     submitter: "Triage/Zuweisung durch:",
-                    cleared: "Archiv erfolgreich gelöscht."
+                    cleared: "Archiv erfolgreich gelöscht.",
+                    vitals: "Vitalwerte:", // New
+                    paramedic: "Notarzt/Team:", // New
                 },
                 contact: {
                     heading: "Kontaktieren Sie uns",
@@ -439,7 +486,7 @@
                     messagePlaceholder: "Ihre Nachricht",
                     submitBtn: "Nachricht senden",
                 },
-                modal: { // NEW MODAL CONTENT
+                modal: { 
                     title: "Bestätigung der Patientenentlassung",
                     staffLabel: "Mitarbeitername (Arzt/Krankenschwester)",
                     dateLabel: "Entlassungsdatum",
@@ -519,6 +566,14 @@
             getEl('p-name-label').textContent = content.patientEntry.nameLabel;
             getEl('p-dob-label').textContent = content.patientEntry.dobLabel;
             getEl('p-complaint-label').textContent = content.patientEntry.complaintLabel;
+            
+            // NEW VITALS LABELS
+            getEl('vitals-heading').innerHTML = `<span data-lucide="heart-pulse" class="w-5 h-5 mr-2 text-red-500"></span>${content.patientEntry.vitalsHeading}`;
+            getEl('p-bpm-label').textContent = content.patientEntry.bpmLabel;
+            getEl('p-bp-label').textContent = content.patientEntry.bpLabel;
+            // NEW PARAMEDIC LABEL
+            getEl('p-paramedic-label').textContent = content.patientEntry.paramedicLabel;
+
             getEl('p-priority-label').textContent = content.patientEntry.priorityLabel;
             getEl('patientEntry-submit-btn').textContent = content.patientEntry.submitBtn;
 
@@ -605,7 +660,7 @@
                     submitterLabel = content.station.submitter;
                     submitterId = entry.receiverId || 'N/A';
                     buttonText = content.station.releaseBtn;
-                    // *** MODIFIED ACTION TO OPEN MODAL ***
+                    // Modified action to open modal
                     buttonAction = `window.openDischargeModal('${entry.id}', '${entry.name}')`;
                     buttonClass = 'bg-blue-600 hover:bg-blue-700';
 
@@ -649,7 +704,7 @@
                         `${entry.assignedStaffName} (${entry.assignedStaffRole})` : 
                         content.station.unassigned;
 
-                    // Display new discharge info
+                    // Display discharge info
                     const dischargeName = entry.releaserName || content.archive.dischargedBy + ' N/A';
                     const dischargeDate = entry.dischargeDate || 'N/A';
 
@@ -666,6 +721,17 @@
                         </p>
                     `;
                 }
+
+                // Vitals and Paramedic Information (NEW)
+                const vitalsText = (entry.bpm || 'N/A') + ' BPM / ' + (entry.bp || 'N/A');
+                const paramedicText = entry.paramedicName || 'N/A';
+
+                const vitalsDisplay = `
+                    <div class="text-sm text-gray-700 mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <p class="font-semibold text-gray-800 mb-1">${tabContent.vitals} <span class="font-normal text-red-600">${vitalsText}</span></p>
+                        <p class="font-semibold text-gray-800">${tabContent.paramedic} <span class="font-normal text-gray-600">${paramedicText}</span></p>
+                    </div>
+                `;
 
                 // Handle timestamp formatting
                 let timestampField;
@@ -692,7 +758,8 @@
                             <p class="text-sm text-gray-700">
                                 <span class="font-semibold">${content.receiving.complaint}</span> ${entry.chiefComplaint}
                             </p>
-                            <div class="text-xs text-gray-500 mt-2 space-x-4">
+                            ${vitalsDisplay}
+                            <div class="text-xs text-gray-500 mt-3 space-x-4">
                                 <span>${timeLabel} ${timeStr}</span>
                                 <span>| ${submitterLabel} ${submitterDisplay}</span>
                                 ${useMockDb ? '<span class="text-red-500 font-bold ml-4">(MOCK DB ACTIVE)</span>' : ''}
@@ -849,10 +916,9 @@
                 patient.state = 'archived';
                 patient.archivedAt = new Date(); // Timestamp for archiving
                 patient.releaserId = userId;
-                // *** NEW DISCHARGE FIELDS ***
+                // NEW DISCHARGE FIELDS
                 patient.releaserName = staffName;
                 patient.dischargeDate = dischargeDate;
-                // **************************
                 setupMockListener(); 
             }
         }
@@ -1205,11 +1271,16 @@
             patientForm.addEventListener('submit', (e) => {
                 e.preventDefault();
 
+                // Collect all new and existing fields
                 const patientData = {
                     name: getEl('p-name').value,
                     dob: getEl('p-dob').value,
                     chiefComplaint: getEl('p-complaint').value,
                     priority: getEl('p-priority').value,
+                    // NEW FIELDS
+                    bpm: getEl('p-bpm').value,
+                    bp: getEl('p-bp').value,
+                    paramedicName: getEl('p-paramedic').value,
                 };
                 
                 addPatientEntry(patientData);
