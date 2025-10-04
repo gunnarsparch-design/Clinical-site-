@@ -49,7 +49,8 @@
 
             <div class="flex items-center space-x-4">
                 <!-- User ID Display (Important for multi-user context) -->
-                <div class="text-xs text-gray-500 hidden sm:block">
+                <!-- REMOVED 'hidden sm:block' so User ID is always visible for debugging -->
+                <div class="text-xs text-gray-500">
                     <span id="user-id-text">User ID:</span> <span id="user-id-display" class="font-mono text-gray-700">Loading...</span>
                 </div>
                 <!-- Language Toggle -->
@@ -120,8 +121,7 @@
                     <span data-lucide="clipboard-list" class="w-6 h-6 mr-2 text-red-600"></span>
                 </h2>
                 <div id="receiving-list-container" class="space-y-4">
-                    <div id="receiving-loading" class="text-center text-gray-500 italic"></div>
-                    <!-- Patient cards will be rendered here -->
+                    <!-- Patient cards/loading/empty states will be rendered here by JS -->
                 </div>
             </div>
 
@@ -315,6 +315,12 @@
             getEl('page-title').textContent = content.title.split(' | ')[0];
             getEl('current-lang-text').textContent = lang.toUpperCase();
             getEl('user-id-text').textContent = content.userIdText;
+            
+            // Update User ID Display
+            const userIdDisplay = getEl('user-id-display');
+            if(userIdDisplay) {
+                userIdDisplay.textContent = userId || 'Loading...';
+            }
 
             // 2. Determine if Receiving Tab needs to blink (unreceived patients exist)
             const shouldBlink = activeTab !== 'receiving' && patientEntries.length > 0;
@@ -398,15 +404,21 @@
          */
         function renderPatientList(content) {
             const container = getEl('receiving-list-container');
-            const loading = getEl('receiving-loading');
+            if (!container) return; // Safety check if container is null
+
+            // If Firebase is still initializing, show loading state.
+            if (!isAuthReady) {
+                container.innerHTML = `<div class="text-center text-gray-500 italic p-4">${content.receiving.loading}</div>`;
+                return;
+            }
             
-            loading.textContent = isAuthReady ? '' : content.receiving.loading;
-            
+            // If the list is empty, show the empty message.
             if (patientEntries.length === 0) {
-                container.innerHTML = `<p class="text-center text-gray-500 italic">${content.receiving.empty}</p>`;
+                container.innerHTML = `<p class="text-center text-gray-500 italic p-4">${content.receiving.empty}</p>`;
                 return;
             }
 
+            // Otherwise, render the patient cards.
             container.innerHTML = patientEntries.map(entry => {
                 const priorityClass = {
                     high: 'bg-red-100 text-red-800 border-red-400',
@@ -415,7 +427,7 @@
                 }[entry.priority] || 'bg-gray-100 text-gray-800 border-gray-400';
 
                 const displayPriority = content.patientEntry.priorities[entry.priority] || entry.priority;
-                const timeStr = entry.timestamp ? new Date(entry.timestamp.seconds * 1000).toLocaleTimeString(currentState.language, { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+                const timeStr = (entry.timestamp && entry.timestamp.seconds) ? new Date(entry.timestamp.seconds * 1000).toLocaleTimeString(currentState.language, { hour: '2-digit', minute: '2-digit' }) : 'N/A';
                 
                 return `
                     <div class="patient-card p-4 border-l-4 ${priorityClass} rounded-lg shadow-md flex justify-between items-start flex-col sm:flex-row space-y-3 sm:space-y-0">
@@ -465,6 +477,10 @@
         async function initializeFirebase() {
             if (!firebaseConfig) {
                 console.error("Firebase config is missing.");
+                // Ensure UI still renders even without database connection
+                isAuthReady = true; 
+                userId = 'DB-Error'; 
+                render(); 
                 return;
             }
 
@@ -487,6 +503,13 @@
                             userId = auth.currentUser?.uid || crypto.randomUUID();
                         }
                         isAuthReady = true;
+                        
+                        // Update User ID immediately after sign-in
+                        const userIdDisplay = getEl('user-id-display');
+                        if(userIdDisplay) {
+                            userIdDisplay.textContent = userId;
+                        }
+
                         // Initial render after auth
                         render(); 
                         resolve();
@@ -501,6 +524,9 @@
 
             } catch (e) {
                 console.error("Error initializing Firebase or Auth:", e);
+                isAuthReady = true;
+                userId = 'Auth-Error'; 
+                render(); 
             }
         }
         
@@ -522,7 +548,12 @@
                 });
                 
                 // Sort by time, newest first
-                patientEntries.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
+                patientEntries.sort((a, b) => {
+                    // Safety check for serverTimestamp which can be null initially
+                    const aTime = a.timestamp?.seconds || 0;
+                    const bTime = b.timestamp?.seconds || 0;
+                    return bTime - aTime;
+                });
                 
                 // Re-render UI to update list and check for blinking
                 render();
@@ -536,7 +567,7 @@
          * @param {object} patientData - The data from the form.
          */
         async function addPatientEntry(patientData) {
-            if (!db || !userId) return console.error("Database not ready.");
+            if (!db || !userId) return console.error("Database not ready. Cannot add patient.");
             
             const collectionPath = `artifacts/${appId}/public/data/er_patients`;
             const msgBox = getEl('patient-message-box');
@@ -569,7 +600,7 @@
          * @param {string} patientId - The ID of the patient document to update.
          */
         window.receivePatient = async function(patientId) {
-            if (!db) return console.error("Database not ready.");
+            if (!db) return console.error("Database not ready. Cannot receive patient.");
 
             const docPath = `artifacts/${appId}/public/data/er_patients/${patientId}`;
             try {
