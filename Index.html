@@ -34,6 +34,19 @@
                 visibility: hidden;
             }
         }
+        /* Modal Backdrop */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
     </style>
 </head>
 <body class="text-gray-800">
@@ -185,6 +198,32 @@
         </div>
     </footer>
 
+    <!-- Discharge Confirmation Modal -->
+    <div id="discharge-modal" class="modal-backdrop hidden transition-opacity duration-300 opacity-0">
+        <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl max-w-lg w-full transform transition-all duration-300 scale-95">
+            <h3 id="modal-title" class="text-2xl font-bold text-blue-800 mb-4 flex items-center">
+                <span data-lucide="shield-check" class="w-6 h-6 mr-2 text-blue-600"></span>
+            </h3>
+            <p id="modal-patient-name" class="text-lg text-gray-700 mb-4"></p>
+            
+            <form id="discharge-form" class="space-y-4">
+                <div>
+                    <label for="discharge-staff-name" id="modal-staff-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                    <input type="text" id="discharge-staff-name" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Dr. John Doe">
+                </div>
+                <div>
+                    <label for="discharge-date" id="modal-date-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                    <input type="date" id="discharge-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" onclick="window.closeModal()" id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition duration-200"></button>
+                    <button type="submit" id="modal-confirm-btn" class="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition duration-200 shadow-md"></button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- End Discharge Confirmation Modal -->
+
     <!-- Firebase Imports -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -206,6 +245,9 @@
             activeTab: 'home' // 'home', 'patientEntry', 'receiving', 'station', 'archive', 'contact'
         };
         
+        // State for the modal
+        let modalPatientId = null;
+
         // All patients loaded from DB/Mock DB
         let allPatients = []; 
         // Derived lists for UI
@@ -229,6 +271,15 @@
 
         const tabs = ['home', 'patientEntry', 'receiving', 'station', 'archive', 'contact'];
         
+        // Utility to format date to YYYY-MM-DD
+        const getTodayDateString = () => {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months start at 0!
+            const dd = String(today.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        };
+
         // Dictionary for multilingual content
         const dictionary = {
             en: {
@@ -288,11 +339,28 @@
                     priority: "Priority:",
                     complaint: "Complaint:",
                     time: "Archived:",
-                    submitter: "Discharged by:",
+                    dischargedBy: "Discharged by:", // New label
+                    dischargeDate: "Discharge Date:", // New label
+                    submitter: "Triage/Assignment by:", // Use previous submitter for context
                     cleared: "Archive cleared successfully."
                 },
                 contact: {
-                    // ... (Contact dictionary remains the same)
+                    heading: "Contact Us",
+                    addressTitle: "Our Location",
+                    detailsTitle: "General Inquiries",
+                    formTitle: "Send a Message",
+                    namePlaceholder: "Your Name",
+                    emailPlaceholder: "Your Email",
+                    messagePlaceholder: "Your Message",
+                    submitBtn: "Send Message",
+                },
+                modal: { // NEW MODAL CONTENT
+                    title: "Confirm Patient Discharge",
+                    staffLabel: "Staff Name (Doctor/Nurse)",
+                    dateLabel: "Discharge Date",
+                    cancelBtn: "Cancel",
+                    confirmBtn: "Confirm & Archive",
+                    dischargeFailed: "Discharge failed. Please check the form and try again."
                 },
                 footer: {
                     rights: "All rights reserved."
@@ -356,7 +424,9 @@
                     priority: "Priorität:",
                     complaint: "Beschwerde:",
                     time: "Archiviert:",
-                    submitter: "Entlassen durch:",
+                    dischargedBy: "Entlassen durch:",
+                    dischargeDate: "Entlassungsdatum:",
+                    submitter: "Triage/Zuweisung durch:",
                     cleared: "Archiv erfolgreich gelöscht."
                 },
                 contact: {
@@ -368,6 +438,14 @@
                     emailPlaceholder: "Ihre E-Mail",
                     messagePlaceholder: "Ihre Nachricht",
                     submitBtn: "Nachricht senden",
+                },
+                modal: { // NEW MODAL CONTENT
+                    title: "Bestätigung der Patientenentlassung",
+                    staffLabel: "Mitarbeitername (Arzt/Krankenschwester)",
+                    dateLabel: "Entlassungsdatum",
+                    cancelBtn: "Abbrechen",
+                    confirmBtn: "Bestätigen & Archivieren",
+                    dischargeFailed: "Entlassung fehlgeschlagen. Bitte überprüfen Sie das Formular und versuchen Sie es erneut."
                 },
                 footer: {
                     rights: "Alle Rechte vorbehalten."
@@ -451,6 +529,14 @@
                 ).join('');
             }
 
+            // Modal Content (Update labels and buttons)
+            getEl('modal-title').innerHTML = `<span data-lucide="shield-check" class="w-6 h-6 mr-2 text-blue-600"></span>${content.modal.title}`;
+            getEl('modal-staff-label').textContent = content.modal.staffLabel;
+            getEl('modal-date-label').textContent = content.modal.dateLabel;
+            getEl('modal-cancel-btn').textContent = content.modal.cancelBtn;
+            getEl('modal-confirm-btn').textContent = content.modal.confirmBtn;
+
+
             // Dynamic Content Rendering
             if (activeTab === 'receiving') renderPatientList(receivingPatients, 'receiving', content);
             if (activeTab === 'station') renderPatientList(stationPatients, 'station', content);
@@ -519,10 +605,11 @@
                     submitterLabel = content.station.submitter;
                     submitterId = entry.receiverId || 'N/A';
                     buttonText = content.station.releaseBtn;
-                    buttonAction = `window.releasePatient('${entry.id}')`;
+                    // *** MODIFIED ACTION TO OPEN MODAL ***
+                    buttonAction = `window.openDischargeModal('${entry.id}', '${entry.name}')`;
                     buttonClass = 'bg-blue-600 hover:bg-blue-700';
 
-                    // --- NEW STAFF ASSIGNMENT UI ---
+                    // --- STAFF ASSIGNMENT UI ---
                     const assignedStaff = entry.assignedStaffName ? 
                         `${entry.assignedStaffName} (${entry.assignedStaffRole})` : 
                         content.station.unassigned;
@@ -548,20 +635,36 @@
                             </div>
                         </div>
                     `;
-                    // ---------------------------------
 
                 } else { // archive
                     timeLabel = content.archive.time;
                     submitterLabel = content.archive.submitter;
-                    submitterId = entry.releaserId || 'N/A';
+                    submitterId = entry.receiverId || 'N/A';
                     buttonText = 'Record Archived';
                     buttonAction = `console.log('Record is safe from deletion (for now).')`;
                     buttonClass = 'bg-gray-500 cursor-default';
+                    
                     // Display who was assigned before archive
                     const assignedStaff = entry.assignedStaffName ? 
                         `${entry.assignedStaffName} (${entry.assignedStaffRole})` : 
                         content.station.unassigned;
-                    extraInfo = `<p class="text-xs text-gray-500 mt-1"><span class="font-semibold">${content.station.assigned}</span> ${assignedStaff}</p>`;
+
+                    // Display new discharge info
+                    const dischargeName = entry.releaserName || content.archive.dischargedBy + ' N/A';
+                    const dischargeDate = entry.dischargeDate || 'N/A';
+
+
+                    extraInfo = `
+                        <p class="text-xs text-gray-700 mt-2 font-semibold">
+                            ${content.archive.dischargedBy} <span class="font-normal text-gray-600">${dischargeName}</span>
+                        </p>
+                        <p class="text-xs text-gray-700">
+                            ${content.archive.dischargeDate} <span class="font-normal text-gray-600">${dischargeDate}</span>
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1">
+                            <span class="font-semibold">${content.station.assigned}</span> ${assignedStaff}
+                        </p>
+                    `;
                 }
 
                 // Handle timestamp formatting
@@ -626,6 +729,65 @@
             render();
         }
 
+        // --- MODAL FUNCTIONS ---
+
+        /**
+         * Opens the discharge modal for a specific patient.
+         */
+        window.openDischargeModal = function(patientId, patientName) {
+            modalPatientId = patientId;
+            const modalEl = getEl('discharge-modal');
+            
+            getEl('modal-patient-name').textContent = dictionary[currentState.language].modal.title.replace('Patient Discharge', patientName + ' Discharge');
+            getEl('discharge-staff-name').value = ''; // Clear previous entry
+            getEl('discharge-date').value = getTodayDateString(); // Set default date
+
+            modalEl.classList.remove('hidden', 'opacity-0');
+            modalEl.classList.add('opacity-100');
+            getEl('discharge-form').addEventListener('submit', handleDischargeConfirmation, { once: true });
+        };
+
+        /**
+         * Closes the modal.
+         */
+        window.closeModal = function() {
+            const modalEl = getEl('discharge-modal');
+            modalEl.classList.remove('opacity-100');
+            modalEl.classList.add('opacity-0');
+            setTimeout(() => {
+                modalEl.classList.add('hidden');
+                modalPatientId = null;
+            }, 300);
+        };
+
+        /**
+         * Handles the submission of the discharge form (the modal).
+         */
+        async function handleDischargeConfirmation(e) {
+            e.preventDefault();
+            
+            if (!modalPatientId) {
+                console.error("No patient ID associated with the modal.");
+                window.closeModal();
+                return;
+            }
+
+            const staffName = getEl('discharge-staff-name').value.trim();
+            const dischargeDate = getEl('discharge-date').value;
+
+            if (!staffName || !dischargeDate) {
+                console.error(dictionary[currentState.language].modal.dischargeFailed);
+                // Re-attach listener if validation failed and user tries again
+                getEl('discharge-form').addEventListener('submit', handleDischargeConfirmation, { once: true });
+                return;
+            }
+
+            // Perform the patient release/archive operation
+            await releasePatient(modalPatientId, staffName, dischargeDate);
+            
+            window.closeModal();
+        }
+
         // --- MOCK DB FUNCTIONS (Fallback when Firebase is unavailable) ---
 
         /**
@@ -681,12 +843,16 @@
         /**
          * Releases a patient from 'station' to 'archived' in the mock database.
          */
-        function releaseMockPatient(patientId) {
+        function releaseMockPatient(patientId, staffName, dischargeDate) {
             const patient = mockPatients.find(p => p.id === patientId);
             if (patient && patient.state === 'station') {
                 patient.state = 'archived';
                 patient.archivedAt = new Date(); // Timestamp for archiving
                 patient.releaserId = userId;
+                // *** NEW DISCHARGE FIELDS ***
+                patient.releaserName = staffName;
+                patient.dischargeDate = dischargeDate;
+                // **************************
                 setupMockListener(); 
             }
         }
@@ -708,7 +874,9 @@
          * Clears old archived patients from the mock database. (1 hour threshold for real app, using 1 minute for easy testing of logic)
          */
         function clearOldMockArchives() {
-            const oneHourAgo = new Date(Date.now() - 60000); // Using 1 minute for demo purposes, but simulating the hourly action
+            // Using 1 minute (60000ms) for demo purposes, but simulating the hourly action
+            const ONE_HOUR_MS_MOCK = 60000; 
+            const oneHourAgo = new Date(Date.now() - ONE_HOUR_MS_MOCK); 
             
             const initialCount = mockPatients.length;
             mockPatients = mockPatients.filter(p => 
@@ -893,10 +1061,11 @@
 
         /**
          * Updates a patient entry's status from 'station' to 'archived'.
+         * Now requires staffName and dischargeDate.
          */
-        window.releasePatient = async function(patientId) {
+        async function releasePatient(patientId, staffName, dischargeDate) {
             if (useMockDb) {
-                releaseMockPatient(patientId);
+                releaseMockPatient(patientId, staffName, dischargeDate);
                 return;
             }
 
@@ -907,7 +1076,9 @@
                 await updateDoc(doc(db, docPath), {
                     state: 'archived',
                     archivedAt: serverTimestamp(),
-                    releaserId: userId // Discharge officer
+                    releaserId: userId, // Discharge officer ID
+                    releaserName: staffName, // NEW
+                    dischargeDate: dischargeDate // NEW
                 });
                 window.setTab('archive'); // Automatically switch to the archive view
             } catch (e) {
@@ -1043,6 +1214,9 @@
                 
                 addPatientEntry(patientData);
             });
+            
+            // Set the default date for the modal form on load
+            getEl('discharge-date').value = getTodayDateString();
         });
     </script>
 </body>
