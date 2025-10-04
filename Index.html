@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAMS | San Andres Medical Service</title>
+    <!-- Load Firebase/Tailwind/Icons -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom font import for a professional look */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Light gray background */
+        }
+        .main-container {
+            min-height: calc(100vh - 80px); /* Account for header */
+        }
+        /* Custom focus state for accessibility */
+        .tab-btn:focus, .lang-btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.5); /* Blue ring */
+        }
+        /* CSS for the blinking effect */
+        .blinking-red {
+            animation: blink-animation 1s steps(5, start) infinite;
+            background-color: #fecaca !important; /* Red-200 */
+            color: #991b1b !important; /* Red-800 */
+        }
+        @keyframes blink-animation {
+            to {
+                visibility: hidden;
+            }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Header & Navigation -->
+    <header class="bg-white shadow-md sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <!-- Logo/Brand -->
+            <div class="flex items-center space-x-2">
+                <div class="text-2xl font-extrabold text-blue-600">SAMS</div>
+                <div id="header-slogan" class="text-sm text-gray-500 hidden sm:block"></div>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <!-- User ID Display (Important for multi-user context) -->
+                <div class="text-xs text-gray-500 hidden sm:block">
+                    <span id="user-id-text">User ID:</span> <span id="user-id-display" class="font-mono text-gray-700">Loading...</span>
+                </div>
+                <!-- Language Toggle -->
+                <button id="language-toggle" class="lang-btn flex items-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-3 rounded-lg transition duration-200 text-sm">
+                    <span id="current-lang-text">EN</span>
+                    <span data-lucide="globe" class="w-4 h-4 ml-2"></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-container max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- Title -->
+        <h1 id="page-title" class="text-3xl sm:text-4xl font-bold text-blue-800 mb-6 text-center"></h1>
+        
+        <!-- Tab Navigation (Desktop and Mobile) -->
+        <div class="bg-white p-2 rounded-xl shadow-lg mb-8 overflow-x-auto">
+            <nav id="tab-nav" class="flex space-x-1 sm:space-x-2 justify-center">
+                <!-- Tab buttons will be inserted here by JavaScript -->
+            </nav>
+        </div>
+
+        <!-- Dynamic Content Section -->
+        <div id="content-container" class="space-y-8">
+            
+            <!-- Home/Start Content -->
+            <div id="tab-home" class="tab-content bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-blue-600">
+                <h2 id="home-heading" class="text-2xl font-semibold text-gray-900 mb-4"></h2>
+                <p id="home-paragraph-1" class="text-gray-600 mb-4 leading-relaxed"></p>
+                <p id="home-paragraph-2" class="text-gray-600 leading-relaxed"></p>
+            </div>
+
+            <!-- Patient Entry / Patienteneingabe Content -->
+            <div id="tab-patientEntry" class="tab-content hidden bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-green-600">
+                <h2 id="patientEntry-heading" class="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
+                    <span data-lucide="user-plus" class="w-6 h-6 mr-2 text-green-600"></span>
+                </h2>
+                
+                <form id="patient-entry-form" class="space-y-4 max-w-lg mx-auto">
+                    <div>
+                        <label for="p-name" id="p-name-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                        <input type="text" id="p-name" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
+                    </div>
+                    <div>
+                        <label for="p-dob" id="p-dob-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                        <input type="date" id="p-dob" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
+                    </div>
+                    <div>
+                        <label for="p-complaint" id="p-complaint-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                        <textarea id="p-complaint" rows="3" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500"></textarea>
+                    </div>
+                    <div>
+                        <label for="p-priority" id="p-priority-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                        <select id="p-priority" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 bg-white">
+                            <!-- Options populated by JS render function -->
+                        </select>
+                    </div>
+                    <button type="submit" id="patientEntry-submit-btn" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition duration-200 shadow-md"></button>
+                    <div id="patient-message-box" class="mt-4 p-3 rounded-lg text-center hidden" role="alert"></div>
+                </form>
+            </div>
+
+            <!-- Receiving / Empfang Content -->
+            <div id="tab-receiving" class="tab-content hidden bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-red-600">
+                <h2 id="receiving-heading" class="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
+                    <span data-lucide="clipboard-list" class="w-6 h-6 mr-2 text-red-600"></span>
+                </h2>
+                <div id="receiving-list-container" class="space-y-4">
+                    <div id="receiving-loading" class="text-center text-gray-500 italic"></div>
+                    <!-- Patient cards will be rendered here -->
+                </div>
+            </div>
+
+            <!-- Contact / Kontakt Content -->
+            <div id="tab-contact" class="tab-content hidden bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-gray-600">
+                <h2 id="contact-heading" class="text-2xl font-semibold text-gray-900 mb-4 flex items-center">
+                    <span data-lucide="mail" class="w-6 h-6 mr-2 text-gray-600"></span>
+                </h2>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 id="contact-address-title" class="font-bold text-lg text-gray-700 mb-2"></h3>
+                        <p class="text-gray-600">
+                            San Andres Medical Service (SAMS)<br>
+                            123 Health Ave, San Andres City<br>
+                            CA 90210, Country<br>
+                        </p>
+                    </div>
+                    <div>
+                        <h3 id="contact-details-title" class="font-bold text-lg text-gray-700 mb-2"></h3>
+                        <p id="contact-phone" class="text-gray-600 mb-1">Phone: +1 555-SAMS-HELP</p>
+                        <p id="contact-email" class="text-gray-600">Email: info@sams.com</p>
+                    </div>
+                </div>
+                <div class="mt-8">
+                    <h3 id="contact-form-title" class="font-bold text-lg text-gray-700 mb-4"></h3>
+                    <form>
+                        <input id="contact-name-placeholder" type="text" placeholder="" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        <input id="contact-email-placeholder" type="email" placeholder="" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        <textarea id="contact-message-placeholder" rows="4" placeholder="" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></textarea>
+                        <button id="contact-submit-btn" type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md"></button>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white mt-10 p-4">
+        <div class="max-w-7xl mx-auto text-center text-sm">
+            &copy; <span id="footer-year"></span> San Andres Medical Service (SAMS). <span id="footer-rights"></span>
+        </div>
+    </footer>
+
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, updateDoc, onSnapshot, collection, query, where, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Set Firebase Log Level to Debug
+        setLogLevel('Debug');
+        
+        // --- Global Variables (Provided by Canvas Environment) ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // --- Core Application State & Logic ---
+        
+        let currentState = {
+            language: 'en', // 'en' or 'de'
+            activeTab: 'home' // 'home', 'patientEntry', 'receiving', 'contact'
+        };
+        let patientEntries = []; // Real-time data storage for unreceived patients
+
+        // Firebase Instances
+        let app, db, auth, userId = null;
+        let isAuthReady = false;
+
+        const tabs = ['home', 'patientEntry', 'receiving', 'contact'];
+        
+        // Dictionary for multilingual content
+        const dictionary = {
+            en: {
+                title: "SAMS | Emergency Patient Intake",
+                slogan: "Real-time Clinical Intake & Triage",
+                userIdText: "User ID:",
+                nav: {
+                    home: "Home",
+                    patientEntry: "Patient Entry",
+                    receiving: "Receiving",
+                    contact: "Contact"
+                },
+                home: {
+                    heading: "Welcome to SAMS Intake System",
+                    p1: "This interface is designed for rapid patient entry and triage management in the Emergency Room. Please use the Patient Entry tab to log incoming patients immediately.",
+                    p2: "The Receiving tab shows all pending patients awaiting clinical assignment. This list is updated in real-time.",
+                },
+                patientEntry: {
+                    heading: "ER Patient Quick Entry",
+                    nameLabel: "Patient Full Name",
+                    dobLabel: "Date of Birth (DOB)",
+                    complaintLabel: "Chief Complaint (Symptoms/Injury)",
+                    priorityLabel: "Triage Priority",
+                    priorities: { low: "Low (Scheduled/Stable)", medium: "Medium (Urgent)", high: "High (Critical)" },
+                    submitBtn: "Log Patient Entry",
+                    success: "Patient entry logged successfully. The Receiving team has been notified.",
+                    error: "Error saving patient. Please check console.",
+                },
+                receiving: {
+                    heading: "Incoming Patients (Awaiting Triage)",
+                    loading: "Loading patients...",
+                    empty: "No patients currently awaiting triage.",
+                    receiveBtn: "Receive Patient",
+                    priority: "Priority:",
+                    complaint: "Complaint:",
+                    time: "Time:",
+                    submitter: "Submitted by:",
+                },
+                contact: {
+                    heading: "Contact Us",
+                    addressTitle: "Our Location",
+                    detailsTitle: "General Enquiries",
+                    formTitle: "Send a Message",
+                    namePlaceholder: "Your Name",
+                    emailPlaceholder: "Your Email",
+                    messagePlaceholder: "Your Message",
+                    submitBtn: "Send Message",
+                },
+                footer: {
+                    rights: "All rights reserved."
+                }
+            },
+            de: {
+                title: "SAMS | Notfall Patientenaufnahme",
+                slogan: "Echtzeit Klinische Aufnahme & Triage",
+                userIdText: "Benutzer-ID:",
+                nav: {
+                    home: "Startseite",
+                    patientEntry: "Patienteneingabe",
+                    receiving: "Empfang",
+                    contact: "Kontakt"
+                },
+                home: {
+                    heading: "Willkommen beim SAMS Aufnahmesystem",
+                    p1: "Diese Oberfläche dient der schnellen Patientenaufnahme und dem Triage-Management in der Notaufnahme. Bitte verwenden Sie den Reiter Patienteneingabe, um eintreffende Patienten sofort zu protokollieren.",
+                    p2: "Der Empfangs-Reiter zeigt alle ausstehenden Patienten an, die auf eine klinische Zuweisung warten. Diese Liste wird in Echtzeit aktualisiert.",
+                },
+                patientEntry: {
+                    heading: "Notfall Patientenschnelleingabe",
+                    nameLabel: "Voller Name des Patienten",
+                    dobLabel: "Geburtsdatum (Geb.)",
+                    complaintLabel: "Hauptbeschwerde (Symptome/Verletzung)",
+                    priorityLabel: "Triage-Priorität",
+                    priorities: { low: "Niedrig (Geplant/Stabil)", medium: "Mittel (Dringend)", high: "Hoch (Kritisch)" },
+                    submitBtn: "Patienteneintrag Protokollieren",
+                    success: "Patienteneintrag erfolgreich protokolliert. Das Empfangsteam wurde benachrichtigt.",
+                    error: "Fehler beim Speichern des Patienten. Bitte Konsole überprüfen.",
+                },
+                receiving: {
+                    heading: "Eintreffende Patienten (Warten auf Triage)",
+                    loading: "Patienten werden geladen...",
+                    empty: "Derzeit warten keine Patienten auf die Triage.",
+                    receiveBtn: "Patient Aufnehmen",
+                    priority: "Priorität:",
+                    complaint: "Beschwerde:",
+                    time: "Zeit:",
+                    submitter: "Eingereicht von:",
+                },
+                contact: {
+                    heading: "Kontaktieren Sie uns",
+                    addressTitle: "Unser Standort",
+                    detailsTitle: "Allgemeine Anfragen",
+                    formTitle: "Nachricht senden",
+                    namePlaceholder: "Ihr Name",
+                    emailPlaceholder: "Ihre E-Mail",
+                    messagePlaceholder: "Ihre Nachricht",
+                    submitBtn: "Nachricht senden",
+                },
+                footer: {
+                    rights: "Alle Rechte vorbehalten."
+                }
+            }
+        };
+
+        // Utility to safely retrieve DOM elements
+        const getEl = (id) => document.getElementById(id);
+
+        /**
+         * Renders the UI elements based on the current state (language and activeTab).
+         */
+        function render() {
+            const lang = currentState.language;
+            const content = dictionary[lang];
+            const activeTab = currentState.activeTab;
+
+            // 1. Update Global Text Elements
+            document.title = content.title;
+            getEl('header-slogan').textContent = content.slogan;
+            getEl('page-title').textContent = content.title.split(' | ')[0];
+            getEl('current-lang-text').textContent = lang.toUpperCase();
+            getEl('user-id-text').textContent = content.userIdText;
+
+            // 2. Determine if Receiving Tab needs to blink (unreceived patients exist)
+            const shouldBlink = activeTab !== 'receiving' && patientEntries.length > 0;
+
+            // 3. Render Navigation Tabs
+            const tabNav = getEl('tab-nav');
+            tabNav.innerHTML = tabs.map(tab => {
+                const isActive = tab === activeTab;
+                let baseClasses = "tab-btn px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium rounded-lg transition duration-200 cursor-pointer whitespace-nowrap";
+                let activeClasses = "bg-blue-600 text-white shadow-lg";
+                let inactiveClasses = "text-gray-700 hover:bg-gray-100";
+                
+                // Add blinking class if conditions met
+                if (tab === 'receiving' && shouldBlink) {
+                    baseClasses += ' blinking-red';
+                    inactiveClasses = "text-red-800 hover:bg-red-100";
+                }
+
+                return `
+                    <button id="btn-${tab}" data-tab="${tab}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}" onclick="window.setTab('${tab}')">
+                        ${content.nav[tab]}
+                    </button>
+                `;
+            }).join('');
+
+            // 4. Update Content Sections and Visibility
+            tabs.forEach(tab => {
+                const tabEl = getEl(`tab-${tab}`);
+                if (tabEl) {
+                    tabEl.classList.toggle('hidden', tab !== activeTab);
+                }
+            });
+
+            // Home Tab Content
+            getEl('home-heading').textContent = content.home.heading;
+            getEl('home-paragraph-1').textContent = content.home.p1;
+            getEl('home-paragraph-2').textContent = content.home.p2;
+
+            // Patient Entry Tab Content (Update labels and options)
+            getEl('patientEntry-heading').innerHTML = `<span data-lucide="user-plus" class="w-6 h-6 mr-2 text-green-600"></span>${content.patientEntry.heading}`;
+            getEl('p-name-label').textContent = content.patientEntry.nameLabel;
+            getEl('p-dob-label').textContent = content.patientEntry.dobLabel;
+            getEl('p-complaint-label').textContent = content.patientEntry.complaintLabel;
+            getEl('p-priority-label').textContent = content.patientEntry.priorityLabel;
+            getEl('patientEntry-submit-btn').textContent = content.patientEntry.submitBtn;
+
+            const prioritySelect = getEl('p-priority');
+            if (prioritySelect.options.length === 0 || prioritySelect.options[0].value !== 'low') {
+                prioritySelect.innerHTML = Object.entries(content.patientEntry.priorities).map(([key, value]) => 
+                    `<option value="${key}" ${key === 'medium' ? 'selected' : ''}>${value}</option>`
+                ).join('');
+            }
+
+
+            // Receiving Tab Content
+            getEl('receiving-heading').innerHTML = `<span data-lucide="clipboard-list" class="w-6 h-6 mr-2 text-red-600"></span>${content.receiving.heading}`;
+            renderPatientList(content);
+
+
+            // Contact Tab Content
+            getEl('contact-heading').innerHTML = `<span data-lucide="mail" class="w-6 h-6 mr-2 text-gray-600"></span>${content.contact.heading}`;
+            getEl('contact-address-title').textContent = content.contact.addressTitle;
+            getEl('contact-details-title').textContent = content.contact.detailsTitle;
+            getEl('contact-form-title').textContent = content.contact.formTitle;
+            getEl('contact-name-placeholder').placeholder = content.contact.namePlaceholder;
+            getEl('contact-email-placeholder').placeholder = content.contact.emailPlaceholder;
+            getEl('contact-message-placeholder').placeholder = content.contact.messagePlaceholder;
+            getEl('contact-submit-btn').textContent = content.contact.submitBtn;
+
+            // Footer
+            getEl('footer-year').textContent = new Date().getFullYear();
+            getEl('footer-rights').textContent = content.footer.rights;
+            
+            // Re-render Lucide icons
+            lucide.createIcons();
+        }
+
+        /**
+         * Renders the patient list in the 'Receiving' tab based on current patientEntries data.
+         * @param {object} content - The dictionary content for the current language.
+         */
+        function renderPatientList(content) {
+            const container = getEl('receiving-list-container');
+            const loading = getEl('receiving-loading');
+            
+            loading.textContent = isAuthReady ? '' : content.receiving.loading;
+            
+            if (patientEntries.length === 0) {
+                container.innerHTML = `<p class="text-center text-gray-500 italic">${content.receiving.empty}</p>`;
+                return;
+            }
+
+            container.innerHTML = patientEntries.map(entry => {
+                const priorityClass = {
+                    high: 'bg-red-100 text-red-800 border-red-400',
+                    medium: 'bg-yellow-100 text-yellow-800 border-yellow-400',
+                    low: 'bg-green-100 text-green-800 border-green-400'
+                }[entry.priority] || 'bg-gray-100 text-gray-800 border-gray-400';
+
+                const displayPriority = content.patientEntry.priorities[entry.priority] || entry.priority;
+                const timeStr = entry.timestamp ? new Date(entry.timestamp.seconds * 1000).toLocaleTimeString(currentState.language, { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+                
+                return `
+                    <div class="patient-card p-4 border-l-4 ${priorityClass} rounded-lg shadow-md flex justify-between items-start flex-col sm:flex-row space-y-3 sm:space-y-0">
+                        <div class="flex-grow">
+                            <h3 class="text-xl font-bold mb-1">${entry.name} <span class="text-sm font-normal text-gray-600">(${entry.dob})</span></h3>
+                            <p class="text-sm font-semibold mb-2 ${priorityClass.split(' ')[1]}">
+                                ${content.receiving.priority} ${displayPriority}
+                            </p>
+                            <p class="text-sm text-gray-700">
+                                <span class="font-semibold">${content.receiving.complaint}</span> ${entry.chiefComplaint}
+                            </p>
+                            <div class="text-xs text-gray-500 mt-2 space-x-4">
+                                <span>${content.receiving.time} ${timeStr}</span>
+                                <span>| ${content.receiving.submitter} ${entry.submitterId.substring(0, 8)}...</span>
+                            </div>
+                        </div>
+                        <button onclick="window.receivePatient('${entry.id}')" 
+                                class="w-full sm:w-auto mt-2 sm:mt-0 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-200 shadow-md">
+                            ${content.receiving.receiveBtn}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /**
+         * Changes the active tab and re-renders the UI.
+         * @param {string} tabId - The ID of the tab to switch to.
+         */
+        window.setTab = function(tabId) {
+            if (currentState.activeTab !== tabId) {
+                currentState.activeTab = tabId;
+                render();
+            }
+        };
+
+        /**
+         * Toggles the language between English ('en') and German ('de').
+         */
+        function toggleLanguage() {
+            currentState.language = currentState.language === 'en' ? 'de' : 'en';
+            render();
+        }
+
+        // --- FIREBASE FUNCTIONS ---
+
+        async function initializeFirebase() {
+            if (!firebaseConfig) {
+                console.error("Firebase config is missing.");
+                return;
+            }
+
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Check for initial auth token and sign in, or sign in anonymously
+                const signInPromise = new Promise((resolve) => {
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            userId = user.uid;
+                        } else {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                            userId = auth.currentUser?.uid || crypto.randomUUID();
+                        }
+                        isAuthReady = true;
+                        // Initial render after auth
+                        render(); 
+                        resolve();
+                    });
+                });
+                
+                await signInPromise;
+
+                if (db && isAuthReady) {
+                    setupRealtimeListener(db);
+                }
+
+            } catch (e) {
+                console.error("Error initializing Firebase or Auth:", e);
+            }
+        }
+        
+        /**
+         * Sets up the real-time listener for unreceived ER patient entries.
+         * @param {Firestore} firestore - The Firestore instance.
+         */
+        function setupRealtimeListener(firestore) {
+            const collectionPath = `artifacts/${appId}/public/data/er_patients`;
+            const patientsCollection = collection(firestore, collectionPath);
+            
+            // Query for patients where isReceived is false
+            const q = query(patientsCollection, where("isReceived", "==", false));
+
+            onSnapshot(q, (snapshot) => {
+                patientEntries = [];
+                snapshot.forEach((doc) => {
+                    patientEntries.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Sort by time, newest first
+                patientEntries.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
+                
+                // Re-render UI to update list and check for blinking
+                render();
+            }, (error) => {
+                console.error("Error listening to patients data: ", error);
+            });
+        }
+
+        /**
+         * Adds a new patient entry to Firestore.
+         * @param {object} patientData - The data from the form.
+         */
+        async function addPatientEntry(patientData) {
+            if (!db || !userId) return console.error("Database not ready.");
+            
+            const collectionPath = `artifacts/${appId}/public/data/er_patients`;
+            const msgBox = getEl('patient-message-box');
+            const content = dictionary[currentState.language].patientEntry;
+
+            try {
+                await addDoc(collection(db, collectionPath), {
+                    ...patientData,
+                    isReceived: false,
+                    timestamp: serverTimestamp(),
+                    submitterId: userId
+                });
+                
+                msgBox.textContent = content.success;
+                msgBox.className = 'mt-4 p-3 rounded-lg text-center bg-green-100 text-green-800';
+                setTimeout(() => msgBox.classList.add('hidden'), 3000);
+                document.getElementById('patient-entry-form').reset(); // Clear form
+                msgBox.classList.remove('hidden');
+
+            } catch (e) {
+                msgBox.textContent = content.error;
+                msgBox.className = 'mt-4 p-3 rounded-lg text-center bg-red-100 text-red-800';
+                msgBox.classList.remove('hidden');
+                console.error("Error adding document: ", e);
+            }
+        }
+        
+        /**
+         * Updates a patient entry's status to 'received' (true).
+         * @param {string} patientId - The ID of the patient document to update.
+         */
+        window.receivePatient = async function(patientId) {
+            if (!db) return console.error("Database not ready.");
+
+            const docPath = `artifacts/${appId}/public/data/er_patients/${patientId}`;
+            try {
+                await updateDoc(doc(db, docPath), {
+                    isReceived: true,
+                    receivedAt: serverTimestamp(),
+                    receiverId: userId
+                });
+                // The onSnapshot listener will automatically update the UI after this.
+            } catch (e) {
+                console.error("Error updating patient status: ", e);
+            }
+        };
+
+
+        // --- Event Listeners and Initialization ---
+
+        getEl('language-toggle').addEventListener('click', toggleLanguage);
+
+        // Form submission handler
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize Firebase services
+            initializeFirebase(); 
+
+            // Simple contact form submission handler (prevents page reload)
+            const contactForm = getEl('tab-contact').querySelector('form');
+            contactForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                // Simple feedback for the non-functional contact form
+                const submitBtn = getEl('contact-submit-btn');
+                const originalText = submitBtn.textContent;
+                
+                const langContent = dictionary[currentState.language].patientEntry;
+                
+                submitBtn.textContent = currentState.language === 'en' ? 'Message Sent! Thank you.' : 'Nachricht gesendet! Danke.';
+                submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                submitBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                
+                setTimeout(() => {
+                    submitBtn.textContent = originalText;
+                    submitBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                    submitBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                    contactForm.reset();
+                }, 3000);
+            });
+
+            // Patient Entry form handler
+            const patientForm = getEl('patient-entry-form');
+            patientForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+
+                const patientData = {
+                    name: getEl('p-name').value,
+                    dob: getEl('p-dob').value,
+                    chiefComplaint: getEl('p-complaint').value,
+                    priority: getEl('p-priority').value,
+                };
+                
+                addPatientEntry(patientData);
+            });
+        });
+    </script>
+</body>
+</html>
