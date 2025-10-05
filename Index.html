@@ -7,6 +7,1050 @@
     <!-- Load Firebase/Tailwind/Icons -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Set Firebase Log Level to Debug
+        setLogLevel('Debug');
+        
+        // --- Global Variables (Provided by Canvas Environment) ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Firebase Instances
+        let app, db, auth, userId = null;
+        let isAuthReady = false;
+        let useMockDb = false;
+        
+        // All patients loaded from DB/Mock DB
+        let allPatients = []; 
+        // Derived lists for UI
+        let receivingPatients = []; 
+        let stationPatients = [];
+        let archivedPatients = [];
+        let mockPatients = []; // Mock database for when Firebase is unavailable
+        let updateTimerInterval; // Interval for real-time timer updates
+
+        // Mock Staff for assignment feature
+        const mockStaff = [
+            { id: 'DR101', name: 'Dr. Emily Carter', role: 'Doctor' },
+            { id: 'DR102', name: 'Dr. Ben Jones', role: 'Doctor' },
+            { id: 'NR201', name: 'Nurse Lisa Kim', role: 'Nurse' },
+            { id: 'NR202', name: 'Nurse David Chen', role: 'Nurse' },
+        ];
+        
+        // Dictionary for multilingual content
+        const dictionary = {
+            en: {
+                title: "SAMS | Emergency Patient Flow",
+                slogan: "Real-time Clinical Intake & Triage",
+                userIdText: "User ID:",
+                nav: {
+                    home: "Home",
+                    patientEntry: "Patient Entry",
+                    receiving: "Receiving",
+                    station: "Station View",
+                    archive: "Archive",
+                    contact: "Contact"
+                },
+                home: {
+                    heading: "Welcome to SAMS Intake System",
+                    p1: "This interface is designed for rapid patient entry and triage management in the Emergency Room. Please use the Patient Entry tab to log incoming patients immediately.",
+                    p2: "The Receiving tab shows all pending patients awaiting clinical assignment. The Station tab tracks active patients, and the Archive tab holds discharged records. This list is updated in real-time.",
+                },
+                patientEntry: {
+                    heading: "ER Patient Quick Entry",
+                    nameLabel: "Patient Full Name",
+                    dobLabel: "Date of Birth (DOB)",
+                    complaintLabel: "Chief Complaint (Symptoms/Injury)",
+                    vitalsHeading: "Initial Vitals", 
+                    bpmLabel: "BPM (Heart Rate)", 
+                    bpLabel: "Blood Pressure (Sys/Dia)", 
+                    paramedicLabel: "Paramedic/Sending Team Name", 
+                    priorityLabel: "Triage Priority",
+                    priorities: { low: "Low (Scheduled/Stable)", medium: "Medium (Urgent)", high: "High (Critical)" },
+                    submitBtn: "Log Patient Entry",
+                    success: "Patient entry logged successfully. The Receiving team has been notified.",
+                    error: "Error saving patient. Check console for details (Mock DB is active if no Firebase connection).",
+                },
+                receiving: {
+                    heading: "Incoming Patients (Awaiting Triage)",
+                    loading: "Loading patients...",
+                    empty: "No patients currently awaiting triage.",
+                    receiveBtn: "Assign & Move to Station", 
+                    priority: "Priority:",
+                    complaint: "Complaint:",
+                    time: "Time in Receiving:", 
+                    submitter: "Submitted by:",
+                    vitals: "Vitals:", 
+                    paramedic: "Paramedic:", 
+                    // NEW STATION CHOICES
+                    stationLabel: "Assign Station Location",
+                    stationLocations: { 
+                        icu: "ICU (Intensive Care Unit)", 
+                        recovery: "Recovery Ward", 
+                        discharge: "Discharge Prep Area" 
+                    },
+                },
+                station: {
+                    heading: "Active Patients (Assigned Station)",
+                    loading: "Loading active patients...",
+                    empty: "No patients currently assigned to a station.",
+                    releaseBtn: "Release Patient / Archive", 
+                    priority: "Priority:",
+                    complaint: "Complaint:",
+                    time: "Time at Station:", 
+                    submitter: "Triage/Assignment by:",
+                    assigned: "Assigned Staff:",
+                    currentStation: "Current Station:", // NEW
+                    assignBtn: "Change Staff",
+                    unassigned: "Unassigned",
+                    vitals: "Vitals:", 
+                    paramedic: "Paramedic:", 
+                    updateVitalsBtn: "Update Vitals", // NEW
+                },
+                archive: {
+                    heading: "Archived/Discharged Patients",
+                    loading: "Loading archived records...",
+                    empty: "No patients currently in the archive.",
+                    priority: "Priority:",
+                    complaint: "Complaint:",
+                    time: "Archived:",
+                    dischargedBy: "Discharged by:", 
+                    dischargeDate: "Discharge Date:", 
+                    submitter: "Triage/Assignment by:", 
+                    cleared: "Archive cleared successfully.",
+                    vitals: "Vitals:", 
+                    paramedic: "Paramedic:", 
+                },
+                contact: {
+                    heading: "Contact Us",
+                    addressTitle: "Our Location",
+                    detailsTitle: "General Inquiries",
+                    formTitle: "Send a Message",
+                    namePlaceholder: "Your Name",
+                    emailPlaceholder: "Your Email",
+                    messagePlaceholder: "Your Message",
+                    submitBtn: "Send Message",
+                },
+                modal: { 
+                    title: "Confirm Patient Discharge",
+                    staffLabel: "Staff Name (Doctor/Nurse)",
+                    dateLabel: "Discharge Date",
+                    cancelBtn: "Cancel",
+                    confirmBtn: "Confirm & Archive",
+                    dischargeFailed: "Discharge failed. Please check the form and try again."
+                },
+                footer: {
+                    rights: "All rights reserved."
+                }
+            },
+            de: {
+                title: "SAMS | Notfall Patientenfluss",
+                slogan: "Echtzeit Klinische Aufnahme & Triage",
+                userIdText: "Benutzer-ID:",
+                nav: {
+                    home: "Startseite",
+                    patientEntry: "Patienteneingabe",
+                    receiving: "Empfang",
+                    station: "Stationsansicht",
+                    archive: "Archiv",
+                    contact: "Kontakt"
+                },
+                home: {
+                    heading: "Willkommen beim SAMS Aufnahmesystem",
+                    p1: "Diese Oberfläche dient der schnellen Patientenaufnahme und dem Triage-Management in der Notaufnahme. Bitte verwenden Sie den Reiter Patienteneingabe, um eintreffende Patienten sofort zu protokollieren.",
+                    p2: "Der Empfangs-Reiter zeigt alle ausstehenden Patienten an, die auf eine klinische Zuweisung warten. Der Stations-Reiter verfolgt aktive Patienten, und das Archiv enthält entlassene Aufzeichnungen. Diese Listen werden in Echtzeit aktualisiert.",
+                },
+                patientEntry: {
+                    heading: "Notfall Patientenschnelleingabe",
+                    nameLabel: "Voller Name des Patienten",
+                    dobLabel: "Geburtsdatum (Geb.)",
+                    complaintLabel: "Hauptbeschwerde (Symptome/Verletzung)",
+                    vitalsHeading: "Anfangsvitalwerte", 
+                    bpmLabel: "BPM (Herzfrequenz)", 
+                    bpLabel: "Blutdruck (Sys/Dia)", 
+                    paramedicLabel: "Name des Notarztes/Teams", 
+                    priorityLabel: "Triage-Priorität",
+                    priorities: { low: "Niedrig (Geplant/Stabil)", medium: "Mittel (Dringend)", high: "Hoch (Kritisch)" },
+                    submitBtn: "Patienteneintrag Protokollieren",
+                    success: "Patienteneintrag erfolgreich protokolliert. Das Empfangsteam wurde benachrichtigt.",
+                    error: "Fehler beim Speichern des Patienten. Überprüfen Sie die Konsole (Mock-Datenbank ist aktiv, wenn keine Firebase-Verbindung besteht).",
+                },
+                receiving: {
+                    heading: "Eintreffende Patienten (Warten auf Triage)",
+                    loading: "Patienten werden geladen...",
+                    empty: "Derzeit warten keine Patienten auf die Triage.",
+                    receiveBtn: "Zuweisen & Auf Station Verschieben", 
+                    priority: "Priorität:",
+                    complaint: "Beschwerde:",
+                    time: "Zeit im Empfang:",
+                    submitter: "Eingereicht von:",
+                    vitals: "Vitalwerte:", 
+                    paramedic: "Notarzt/Team:", 
+                    // NEW STATION CHOICES
+                    stationLabel: "Stationsort Zuweisen",
+                    stationLocations: { 
+                        icu: "ICU (Intensivstation)", 
+                        recovery: "Aufwachraum", 
+                        discharge: "Entlassungsvorbereitungsbereich" 
+                    },
+                },
+                station: {
+                    heading: "Aktive Patienten (Zugewiesene Station)",
+                    loading: "Aktive Patienten werden geladen...",
+                    empty: "Derzeit ist kein Patient einer Station zugewiesen.",
+                    releaseBtn: "Patient Entlassen / Archiv",
+                    priority: "Priorität:",
+                    complaint: "Beschwerde:",
+                    time: "Zeit auf Station:",
+                    submitter: "Triage/Zuweisung durch:",
+                    assigned: "Zugewiesener Mitarbeiter:",
+                    currentStation: "Aktuelle Station:", // NEW
+                    assignBtn: "Mitarbeiter Wechseln",
+                    unassigned: "Nicht Zugewiesen",
+                    vitals: "Vitalwerte:", 
+                    paramedic: "Notarzt/Team:", 
+                    updateVitalsBtn: "Vitalwerte Aktualisieren", // NEW
+                },
+                archive: {
+                    heading: "Archivierte/Entlassene Patienten",
+                    loading: "Archivierte Aufzeichnungen werden geladen...",
+                    empty: "Derzeit keine Patienten im Archiv.",
+                    priority: "Priorität:",
+                    complaint: "Beschwerde:",
+                    time: "Archiviert:",
+                    dischargedBy: "Entlassen durch:",
+                    dischargeDate: "Entlassungsdatum:",
+                    submitter: "Triage/Zuweisung durch:",
+                    cleared: "Archiv erfolgreich gelöscht.",
+                    vitals: "Vitalwerte:", 
+                    paramedic: "Notarzt/Team:", 
+                },
+                contact: {
+                    heading: "Kontaktieren Sie uns",
+                    addressTitle: "Unser Standort",
+                    detailsTitle: "Allgemeine Anfragen",
+                    formTitle: "Nachricht senden",
+                    namePlaceholder: "Ihr Name",
+                    emailPlaceholder: "Ihre E-Mail",
+                    messagePlaceholder: "Ihre Nachricht",
+                    submitBtn: "Nachricht senden",
+                },
+                modal: { 
+                    title: "Bestätigung der Patientenentlassung",
+                    staffLabel: "Mitarbeitername (Arzt/Krankenschwester)",
+                    dateLabel: "Entlassungsdatum",
+                    cancelBtn: "Abbrechen",
+                    confirmBtn: "Bestätigen & Archivieren",
+                    dischargeFailed: "Entlassung fehlgeschlagen. Bitte überprüfen Sie das Formular und versuchen Sie es erneut."
+                },
+                footer: {
+                    rights: "Alle Rechte vorbehalten."
+                }
+            }
+        };
+
+        // --- Core Application State & Logic ---
+        
+        const tabs = ['home', 'patientEntry', 'receiving', 'station', 'archive', 'contact'];
+        
+        // Load initial state from localStorage or use defaults
+        const savedLang = localStorage.getItem('samsAppLanguage');
+        const savedTab = localStorage.getItem('samsAppActiveTab');
+
+        let currentState = {
+            // Load language, default to 'en' if not found or invalid
+            language: (savedLang && dictionary[savedLang]) ? savedLang : 'en', 
+            // Load active tab, default to 'home' if not found or invalid
+            activeTab: (savedTab && tabs.includes(savedTab)) ? savedTab : 'home'
+        };
+        
+        // State for the modal
+        let modalPatientId = null;
+
+        // Utility to format date to YYYY-MM-DD
+        const getTodayDateString = () => {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months start at 0!
+            const dd = String(today.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        };
+
+        // Utility to safely retrieve DOM elements
+        const getEl = (id) => document.getElementById(id);
+
+        /**
+         * Converts Firestore Timestamp or JS Date to a standardized Date object.
+         * Handles mock DB numbers and Firestore objects.
+         */
+        const toJsDate = (timestamp) => {
+            if (!timestamp) return null;
+            if (typeof timestamp === 'number') { // Mock DB timestamp (ms)
+                return new Date(timestamp);
+            }
+            if (timestamp.toDate) { // Firestore Timestamp object
+                return timestamp.toDate();
+            }
+            return new Date(timestamp); // Fallback for other Date-like strings/objects
+        };
+
+        /**
+         * Formats time elapsed since a timestamp.
+         * @param {object} timestamp - The Firestore Timestamp or mock timestamp.
+         * @returns {string} Formatted elapsed time (e.g., 5m ago, 2h ago)
+         */
+        const formatTimeSince = (timestamp) => {
+            const date = toJsDate(timestamp);
+            if (!date) return '--';
+
+            const now = Date.now();
+            const seconds = Math.floor((now - date.getTime()) / 1000);
+            
+            let interval = seconds / 31536000;
+            if (interval > 1) return Math.floor(interval) + "y";
+            interval = seconds / 2592000;
+            if (interval > 1) return Math.floor(interval) + "mo";
+            interval = seconds / 86400;
+            if (interval > 1) return Math.floor(interval) + "d";
+            interval = seconds / 3600;
+            if (interval > 1) return Math.floor(interval) + "h";
+            interval = seconds / 60;
+            if (interval > 1) return Math.floor(interval) + "m";
+            return Math.floor(seconds) + "s";
+        };
+
+        /**
+         * Sets the active tab and saves it to localStorage.
+         */
+        window.setTab = (tab) => {
+            if (currentState.activeTab !== tab) {
+                currentState.activeTab = tab;
+                localStorage.setItem('samsAppActiveTab', tab);
+                render();
+            }
+        };
+
+        /**
+         * Toggles the application language.
+         */
+        window.toggleLanguage = () => {
+            currentState.language = currentState.language === 'en' ? 'de' : 'en';
+            localStorage.setItem('samsAppLanguage', currentState.language);
+            render();
+        };
+
+        /**
+         * Opens the discharge confirmation modal.
+         */
+        window.openModal = (patientId) => {
+            modalPatientId = patientId;
+            const patient = allPatients.find(p => p.id === patientId);
+            const modal = getEl('discharge-modal');
+            const content = dictionary[currentState.language].modal;
+
+            if (patient && modal) {
+                getEl('modal-patient-name').textContent = `${content.title}: ${patient.name}`;
+                getEl('discharge-date').value = getTodayDateString();
+                modal.classList.remove('hidden', 'opacity-0');
+                modal.classList.add('opacity-100');
+            }
+        };
+
+        /**
+         * Closes the discharge confirmation modal.
+         */
+        window.closeModal = () => {
+            const modal = getEl('discharge-modal');
+            if (modal) {
+                modal.classList.add('opacity-0');
+                modal.classList.remove('opacity-100');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modalPatientId = null;
+                }, 300); // Wait for transition
+            }
+        };
+
+        /**
+         * Renders the patient card HTML for a given patient and view.
+         */
+        const renderPatientCard = (patient, view) => {
+            const content = dictionary[currentState.language];
+            const isCritical = patient.priority === 'high';
+            const priorityClass = {
+                high: 'bg-red-100 text-red-800 border-red-500',
+                medium: 'bg-yellow-100 text-yellow-800 border-yellow-500',
+                low: 'bg-green-100 text-green-800 border-green-500'
+            }[patient.priority] || 'bg-gray-100 text-gray-800 border-gray-500';
+
+            const blinkingClass = isCritical && view === 'receiving' ? 'blinking-red' : '';
+            
+            const timeKey = view === 'station' ? 'timeAtStation' : 'timeAtEntry';
+            const timeSince = patient[timeKey] ? formatTimeSince(patient[timeKey]) : '--';
+            const timeLabel = view === 'archive' ? content.archive.time : (view === 'station' ? content.station.time : content.receiving.time);
+
+            let actionButton = '';
+            let assignedStaffInfo = '';
+            let dischargeDetails = '';
+            let vitalsDisplayAndUpdater = '';
+
+            if (view === 'receiving') {
+                // Staff assignment and Station selection dropdowns
+                const staffOptions = mockStaff.map(staff => `<option value="${staff.name}" ${patient.assignedStaff === staff.name ? 'selected' : ''}>${staff.role}: ${staff.name}</option>`).join('');
+                
+                // NEW: Station Location Dropdown
+                const stationOptions = Object.entries(content.receiving.stationLocations).map(([key, value]) => 
+                    `<option value="${key}">${value}</option>`
+                ).join('');
+
+                actionButton = `
+                    <div class="flex flex-col space-y-2">
+                        <select id="staff-select-${patient.id}" class="w-full p-2 border border-gray-300 rounded-lg bg-white text-sm font-medium">
+                            <option value="" disabled selected>${content.station.assignBtn}</option>
+                            ${staffOptions}
+                        </select>
+                        
+                        <select id="station-select-${patient.id}" class="w-full p-2 border border-gray-300 rounded-lg bg-white text-sm font-medium">
+                            <option value="" disabled selected>${content.receiving.stationLabel}</option>
+                            ${stationOptions}
+                        </select>
+
+                        <button onclick="window.moveToStation('${patient.id}', document.getElementById('staff-select-${patient.id}').value, document.getElementById('station-select-${patient.id}').value)" 
+                                class="w-full bg-red-600 text-white font-medium py-2 px-3 rounded-lg hover:bg-red-700 transition duration-200 text-sm flex items-center justify-center">
+                            <span data-lucide="chevrons-right" class="w-4 h-4 mr-2"></span>
+                            ${content.receiving.receiveBtn}
+                        </button>
+                    </div>
+                `;
+            } else if (view === 'station') {
+                // Assigned staff info, Current Station, and Discharge button for station
+                const staffOptions = mockStaff.map(staff => `<option value="${staff.name}" ${patient.assignedStaff === staff.name ? 'selected' : ''}>${staff.role}: ${staff.name}</option>`).join('');
+                
+                assignedStaffInfo = `
+                    <p class="text-sm mb-1">
+                        <span class="font-semibold">${content.station.currentStation}</span>
+                        <span class="text-indigo-700 font-medium">${content.receiving.stationLocations[patient.stationLocation] || 'N/A'}</span>
+                    </p>
+                    <p class="text-sm">
+                        <span class="font-semibold">${content.station.assigned}</span>
+                        <span class="text-blue-700 font-medium">${patient.assignedStaff || content.station.unassigned}</span>
+                        <select id="staff-select-${patient.id}" class="w-full mt-1 p-2 border border-gray-300 rounded-lg bg-white text-xs font-medium" onchange="window.updateStaffAssignment('${patient.id}', this.value)">
+                            <option value="" disabled selected>${content.station.assignBtn}</option>
+                            ${staffOptions}
+                        </select>
+                    </p>
+                `;
+                
+                actionButton = `
+                    <button onclick="window.openModal('${patient.id}')" class="w-full bg-blue-600 text-white font-medium py-2 px-3 rounded-lg hover:bg-blue-700 transition duration-200 text-sm flex items-center justify-center">
+                        <span data-lucide="archive" class="w-4 h-4 mr-2"></span>
+                        ${content.station.releaseBtn}
+                    </button>
+                `;
+            } else if (view === 'archive') {
+                // Discharge details for archive
+                dischargeDetails = `
+                    <p class="text-sm">
+                        <span class="font-semibold">${content.archive.dischargedBy}</span>
+                        <span class="text-gray-700">${patient.dischargedBy || 'N/A'}</span>
+                    </p>
+                    <p class="text-sm">
+                        <span class="font-semibold">${content.archive.dischargeDate}</span>
+                        <span class="text-gray-700">${patient.dischargeDate || 'N/A'}</span>
+                    </p>
+                `;
+            }
+
+            // --- Vitals Display and Updater ---
+            vitalsDisplayAndUpdater = `
+                <div class="space-y-1">
+                    <p class="text-sm font-semibold text-gray-800 mb-1">${content.receiving.vitals}</p>
+                    <p class="text-xs text-red-600 font-medium">BPM: <span id="bpm-val-${patient.id}">${patient.bpm || 'N/A'}</span></p>
+                    <p class="text-xs text-red-600 font-medium">BP: <span id="bp-val-${patient.id}">${patient.bp || 'N/A'}</span></p>
+            `;
+            
+            if (view === 'station') {
+                vitalsDisplayAndUpdater += `
+                    <button id="vitals-btn-${patient.id}" onclick="document.getElementById('vitals-form-${patient.id}').classList.toggle('hidden')" 
+                            class="mt-2 w-full text-xs bg-red-100 text-red-700 font-medium py-1 px-2 rounded-lg hover:bg-red-200 transition duration-200 flex items-center justify-center">
+                        <span data-lucide="activity" class="w-3 h-3 mr-1"></span>
+                        ${content.station.updateVitalsBtn}
+                    </button>
+                    
+                    <!-- Inline Vitals Update Form (hidden by default) -->
+                    <form id="vitals-form-${patient.id}" class="hidden space-y-2 mt-3 p-3 bg-gray-50 rounded-lg" onsubmit="event.preventDefault(); window.updatePatientVitals('${patient.id}', document.getElementById('new-bpm-${patient.id}').value, document.getElementById('new-bp-${patient.id}').value)">
+                        <input type="number" id="new-bpm-${patient.id}" placeholder="New BPM" class="w-full p-1 text-xs border border-gray-300 rounded">
+                        <input type="text" id="new-bp-${patient.id}" placeholder="New BP (e.g., 120/80)" class="w-full p-1 text-xs border border-gray-300 rounded">
+                        <button type="submit" class="w-full bg-red-600 text-white text-xs font-medium py-1 rounded hover:bg-red-700">Save Vitals</button>
+                    </form>
+                `;
+            }
+            vitalsDisplayAndUpdater += `</div>`;
+            // --- End Vitals Display and Updater ---
+
+            return `
+                <div id="patient-card-${patient.id}" class="bg-white p-4 sm:p-6 rounded-xl shadow-md border-l-4 ${priorityClass} ${blinkingClass}">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="text-xl font-bold text-gray-900">${patient.name} (${new Date().getFullYear() - new Date(patient.dob).getFullYear()})</h3>
+                        <span class="text-xs font-semibold px-3 py-1 rounded-full ${priorityClass}">${content.patientEntry.priorities[patient.priority]}</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-3 border-gray-100">
+                        <!-- Details Column 1 -->
+                        <div class="space-y-1">
+                            <p class="text-sm">
+                                <span class="font-semibold">${content.receiving.complaint}</span>
+                                <span class="text-gray-700 block">${patient.complaint}</span>
+                            </p>
+                            <p class="text-sm">
+                                <span class="font-semibold">${content.receiving.paramedic}</span>
+                                <span class="text-gray-700 block">${patient.paramedic}</span>
+                            </p>
+                            ${assignedStaffInfo}
+                            ${dischargeDetails}
+                        </div>
+                        
+                        <!-- Details Column 2 (Vitals & Update) -->
+                        ${vitalsDisplayAndUpdater}
+
+                        <!-- Status/Time/Action Column 3 -->
+                        <div class="space-y-3 flex flex-col justify-between">
+                            <div class="space-y-1">
+                                <p class="text-xs">
+                                    <span class="font-semibold">${timeLabel}</span>
+                                    <span id="timer-${patient.id}" class="text-gray-700 font-mono block">${timeSince}</span>
+                                </p>
+                                <p class="text-xs">
+                                    <span class="font-semibold">${content.receiving.submitter}</span>
+                                    <span class="text-gray-700 block">${patient.submittedBy}</span>
+                                </p>
+                            </div>
+                            ${actionButton}
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        /**
+         * Renders the UI elements based on the current state (language and activeTab).
+         */
+        function render() {
+            const lang = currentState.language;
+            const content = dictionary[lang];
+            const activeTab = currentState.activeTab;
+
+            // 1. Update Global Text Elements
+            document.title = content.title;
+            getEl('header-slogan').textContent = content.slogan;
+            getEl('page-title').textContent = content.title.split(' | ')[0];
+            getEl('current-lang-text').textContent = lang.toUpperCase();
+            getEl('user-id-text').textContent = content.userIdText;
+            
+            // Update User ID Display
+            const userIdDisplay = getEl('user-id-display');
+            if(userIdDisplay) {
+                userIdDisplay.textContent = userId || (useMockDb ? 'MOCK-USER' : 'Loading...');
+            }
+
+            // 2. Determine if Receiving Tab needs to blink (unreceived patients exist)
+            const shouldBlink = activeTab !== 'receiving' && receivingPatients.length > 0;
+
+            // 3. Render Navigation Tabs
+            const tabNav = getEl('tab-nav');
+            tabNav.innerHTML = tabs.map(tab => {
+                const isActive = tab === activeTab;
+                let baseClasses = "tab-btn px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium rounded-lg transition duration-200 cursor-pointer whitespace-nowrap";
+                let activeClasses = "bg-blue-600 text-white shadow-lg";
+                let inactiveClasses = "text-gray-700 hover:bg-gray-100";
+                
+                // Add blinking class if conditions met
+                if (tab === 'receiving' && shouldBlink) {
+                    baseClasses += ' blinking-red';
+                    inactiveClasses = "text-red-800 hover:bg-red-100";
+                }
+
+                return `
+                    <button id="btn-${tab}" data-tab="${tab}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}" onclick="window.setTab('${tab}')">
+                        ${content.nav[tab]}
+                    </button>
+                `;
+            }).join('');
+
+            // 4. Update Content Sections and Visibility
+            tabs.forEach(tab => {
+                const tabEl = getEl(`tab-${tab}`);
+                if (tabEl) {
+                    tabEl.classList.toggle('hidden', tab !== activeTab);
+                }
+            });
+
+            // Home Tab Content
+            getEl('home-heading').textContent = content.home.heading;
+            getEl('home-paragraph-1').textContent = content.home.p1;
+            getEl('home-paragraph-2').textContent = content.home.p2;
+
+            // Patient Entry Tab Content (Update labels and options)
+            getEl('patientEntry-heading').innerHTML = `<span data-lucide="user-plus" class="w-6 h-6 mr-2 text-green-600"></span>${content.patientEntry.heading}`;
+            getEl('p-name-label').textContent = content.patientEntry.nameLabel;
+            getEl('p-dob-label').textContent = content.patientEntry.dobLabel;
+            getEl('p-complaint-label').textContent = content.patientEntry.complaintLabel;
+            
+            // NEW VITALS LABELS
+            getEl('vitals-heading').innerHTML = `<span data-lucide="heart-pulse" class="w-5 h-5 mr-2 text-red-500"></span>${content.patientEntry.vitalsHeading}`;
+            getEl('p-bpm-label').textContent = content.patientEntry.bpmLabel;
+            getEl('p-bp-label').textContent = content.patientEntry.bpLabel;
+            // NEW PARAMEDIC LABEL
+            getEl('p-paramedic-label').textContent = content.patientEntry.paramedicLabel;
+
+            getEl('p-priority-label').textContent = content.patientEntry.priorityLabel;
+            getEl('patientEntry-submit-btn').textContent = content.patientEntry.submitBtn;
+
+            const prioritySelect = getEl('p-priority');
+            if (prioritySelect) {
+                // Keep the current selection if one exists, otherwise rebuild
+                const currentPriority = prioritySelect.value;
+                prioritySelect.innerHTML = Object.entries(content.patientEntry.priorities).map(([key, value]) => 
+                    `<option value="${key}" ${key === currentPriority ? 'selected' : ''}>${value}</option>`
+                ).join('');
+            }
+            // Set initial date for DOB to something sensible (e.g., 20 years ago)
+            const dobInput = getEl('p-dob');
+            if (dobInput.value === '') {
+                const twentyYearsAgo = new Date();
+                twentyYearsAgo.setFullYear(twentyYearsAgo.getFullYear() - 20);
+                const yyyy = twentyYearsAgo.getFullYear();
+                const mm = String(twentyYearsAgo.getMonth() + 1).padStart(2, '0');
+                const dd = String(twentyYearsAgo.getDate()).padStart(2, '0');
+                dobInput.value = `${yyyy}-${mm}-${dd}`;
+            }
+
+            // Receiving Tab Content
+            getEl('receiving-heading').innerHTML = `<span data-lucide="clipboard-list" class="w-6 h-6 mr-2 text-red-600"></span>${content.receiving.heading} (${receivingPatients.length})`;
+            const receivingListContainer = getEl('receiving-list-container');
+            if (receivingPatients.length === 0) {
+                receivingListContainer.innerHTML = `<p class="text-gray-500 italic text-center py-6">${content.receiving.empty}</p>`;
+            } else {
+                receivingListContainer.innerHTML = receivingPatients.map(p => renderPatientCard(p, 'receiving')).join('');
+            }
+
+            // Station Tab Content
+            getEl('station-heading').innerHTML = `<span data-lucide="hospital" class="w-6 h-6 mr-2 text-blue-600"></span>${content.station.heading} (${stationPatients.length})`;
+            const stationListContainer = getEl('station-list-container');
+            if (stationPatients.length === 0) {
+                stationListContainer.innerHTML = `<p class="text-gray-500 italic text-center py-6">${content.station.empty}</p>`;
+            } else {
+                stationListContainer.innerHTML = stationPatients.map(p => renderPatientCard(p, 'station')).join('');
+            }
+
+            // Archive Tab Content
+            getEl('archive-heading').innerHTML = `<span data-lucide="archive" class="w-6 h-6 mr-2 text-gray-600"></span>${content.archive.heading} (${archivedPatients.length})`;
+            const archiveListContainer = getEl('archive-list-container');
+            if (archivedPatients.length === 0) {
+                archiveListContainer.innerHTML = `<p class="text-gray-500 italic text-center py-6">${content.archive.empty}</p>`;
+            } else {
+                archiveListContainer.innerHTML = archivedPatients.map(p => renderPatientCard(p, 'archive')).join('');
+            }
+
+            // Contact Tab Content
+            getEl('contact-heading').innerHTML = `<span data-lucide="mail" class="w-6 h-6 mr-2 text-gray-600"></span>${content.contact.heading}`;
+            getEl('contact-address-title').textContent = content.contact.addressTitle;
+            getEl('contact-details-title').textContent = content.contact.detailsTitle;
+            getEl('contact-form-title').textContent = content.contact.formTitle;
+            getEl('contact-name-placeholder').placeholder = content.contact.namePlaceholder;
+            getEl('contact-email-placeholder').placeholder = content.contact.emailPlaceholder;
+            getEl('contact-message-placeholder').placeholder = content.contact.messagePlaceholder;
+            getEl('contact-submit-btn').textContent = content.contact.submitBtn;
+
+            // Modal Content
+            getEl('modal-title').innerHTML = `<span data-lucide="shield-check" class="w-6 h-6 mr-2 text-blue-600"></span>${content.modal.title}`;
+            getEl('modal-staff-label').textContent = content.modal.staffLabel;
+            getEl('modal-date-label').textContent = content.modal.dateLabel;
+            getEl('modal-cancel-btn').textContent = content.modal.cancelBtn;
+            getEl('modal-confirm-btn').textContent = content.modal.confirmBtn;
+
+            // Footer
+            getEl('footer-year').textContent = new Date().getFullYear();
+            getEl('footer-rights').textContent = content.footer.rights;
+
+            // Rerender Lucide icons (needed for dynamically injected content)
+            lucide.createIcons();
+        }
+
+        /**
+         * Real-time listener for patient data.
+         * Updates the global patient lists and triggers a UI render.
+         */
+        function setupPatientListener() {
+            if (!isAuthReady) {
+                console.warn("Auth not ready. Skipping Firestore listener setup.");
+                return;
+            }
+
+            if (useMockDb) {
+                // Initial mock data setup
+                if (mockPatients.length === 0) {
+                    mockPatients = [
+                        { id: 'm1', name: 'John Doe', dob: '1985-01-15', complaint: 'Severe chest pain', paramedic: 'EMT Alpha', priority: 'high', bpm: '110', bp: '140/90', status: 'receiving', timeAtEntry: Date.now() - 300000, submittedBy: 'MOCK-USER', timeAtStation: null, assignedStaff: null, stationLocation: null }, // 5 min ago
+                        { id: 'm2', name: 'Jane Smith', dob: '1992-11-20', complaint: 'Broken arm from fall', paramedic: 'Team 3', priority: 'medium', bpm: '85', bp: '120/80', status: 'station', timeAtEntry: Date.now() - 900000, submittedBy: 'MOCK-USER', timeAtStation: Date.now() - 300000, assignedStaff: 'Dr. Emily Carter', stationLocation: 'recovery' }, // 15 min ago, 5 min at station
+                        { id: 'm3', name: 'Sam Wilson', dob: '1950-05-01', complaint: 'Routine checkup/stable', paramedic: 'Self-Check-In', priority: 'low', bpm: '70', bp: '110/70', status: 'archive', timeAtEntry: Date.now() - 3600000, submittedBy: 'MOCK-USER', timeAtStation: Date.now() - 1800000, assignedStaff: 'Dr. Ben Jones', dischargedBy: 'Dr. Ben Jones', dischargeDate: getTodayDateString(), stationLocation: 'discharge' },
+                    ];
+                }
+                updatePatientLists(mockPatients);
+                return;
+            }
+
+            // Firestore Setup (Public data for collaboration)
+            const publicPatientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'patients');
+            
+            // Set up real-time listener
+            onSnapshot(publicPatientsRef, (snapshot) => {
+                const patients = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                updatePatientLists(patients);
+            }, (error) => {
+                console.error("Error listening to patients collection: ", error);
+                // Fallback to mock data if Firestore connection fails after auth success
+                if (!useMockDb) {
+                    console.log("Falling back to mock database.");
+                    useMockDb = true;
+                    setupPatientListener(); 
+                }
+            });
+        }
+
+        /**
+         * Updates the derived patient lists and triggers a UI render.
+         */
+        function updatePatientLists(patients) {
+            allPatients = patients;
+            receivingPatients = patients
+                .filter(p => p.status === 'receiving')
+                .sort((a, b) => (toJsDate(a.timeAtEntry) - toJsDate(b.timeAtEntry))); // Oldest first
+            stationPatients = patients
+                .filter(p => p.status === 'station')
+                .sort((a, b) => (toJsDate(a.timeAtStation) - toJsDate(b.timeAtStation))); // Oldest first
+            archivedPatients = patients
+                .filter(p => p.status === 'archive')
+                .sort((a, b) => (toJsDate(b.timeAtDischarge) - toJsDate(a.timeAtDischarge) || toJsDate(b.timeAtEntry) - toJsDate(a.timeAtEntry))); // Newest first
+
+            render();
+        }
+
+        /**
+         * Handles the patient entry form submission.
+         */
+        async function handlePatientEntry(event) {
+            event.preventDefault();
+            const form = getEl('patient-entry-form');
+            const messageBox = getEl('patient-message-box');
+            messageBox.classList.add('hidden');
+
+            const name = getEl('p-name').value.trim();
+            const dob = getEl('p-dob').value;
+            const complaint = getEl('p-complaint').value.trim();
+            const paramedic = getEl('p-paramedic').value.trim();
+            const priority = getEl('p-priority').value;
+            const bpm = getEl('p-bpm').value.trim(); 
+            const bp = getEl('p-bp').value.trim(); 
+
+            if (!name || !dob || !complaint || !paramedic || !priority) {
+                console.error("Missing required fields.");
+                return;
+            }
+
+            const newPatient = {
+                name: name,
+                dob: dob,
+                complaint: complaint,
+                paramedic: paramedic,
+                priority: priority,
+                bpm: bpm, 
+                bp: bp, 
+                status: 'receiving', // Always start at receiving
+                timeAtEntry: useMockDb ? Date.now() : serverTimestamp(), // Use serverTimestamp for Firebase
+                timeAtStation: null, // Initially null
+                assignedStaff: null, // Initially null
+                stationLocation: null, // NEW: Initially null
+                submittedBy: userId,
+            };
+
+            try {
+                if (useMockDb) {
+                    newPatient.id = 'm' + (mockPatients.length + 1);
+                    mockPatients.push(newPatient);
+                    updatePatientLists(mockPatients);
+                } else {
+                    const publicPatientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'patients');
+                    await addDoc(publicPatientsRef, newPatient);
+                }
+
+                form.reset();
+                messageBox.textContent = dictionary[currentState.language].patientEntry.success;
+                messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-green-100 text-green-700 block';
+                window.setTab('receiving'); // Auto-switch to receiving view
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                messageBox.textContent = dictionary[currentState.language].patientEntry.error;
+                messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-red-100 text-red-700 block';
+            }
+        }
+
+        /**
+         * Moves patient from 'receiving' to 'station' with staff and location assignment.
+         */
+        window.moveToStation = async (patientId, staffName, stationLocation) => {
+            if (!staffName || staffName === '' || !stationLocation || stationLocation === '') {
+                console.warn("Please select a staff member AND a station location before moving to station.");
+                return;
+            }
+
+            const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
+            const updateData = {
+                status: 'station',
+                assignedStaff: staffName,
+                stationLocation: stationLocation, // NEW: Assign location
+                timeAtStation: useMockDb ? Date.now() : serverTimestamp()
+            };
+
+            try {
+                if (useMockDb) {
+                    const patientIndex = mockPatients.findIndex(p => p.id === patientId);
+                    if (patientIndex !== -1) {
+                        mockPatients[patientIndex] = { ...mockPatients[patientIndex], ...updateData };
+                        updatePatientLists(mockPatients);
+                    }
+                } else {
+                    await updateDoc(patientRef, updateData);
+                }
+                console.log(`Patient ${patientId} assigned to ${staffName} at ${stationLocation} and moved to Station.`);
+                window.setTab('station');
+            } catch (e) {
+                console.error("Error moving patient to station: ", e);
+            }
+        };
+
+        /**
+         * Updates staff assignment for a patient already in 'station'.
+         */
+        window.updateStaffAssignment = async (patientId, staffName) => {
+            if (!staffName || staffName === '') {
+                console.warn("Please select a staff member for assignment update.");
+                return;
+            }
+
+            const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
+            const updateData = {
+                assignedStaff: staffName,
+            };
+
+            try {
+                if (useMockDb) {
+                    const patientIndex = mockPatients.findIndex(p => p.id === patientId);
+                    if (patientIndex !== -1) {
+                        mockPatients[patientIndex] = { ...mockPatients[patientIndex], ...updateData };
+                        updatePatientLists(mockPatients);
+                    }
+                } else {
+                    await updateDoc(patientRef, updateData);
+                }
+                console.log(`Patient ${patientId} staff updated to ${staffName}.`);
+            } catch (e) {
+                console.error("Error updating staff assignment: ", e);
+            }
+        };
+
+        /**
+         * Updates Vitals for a patient already in 'station'.
+         */
+        window.updatePatientVitals = async (patientId, newBpm, newBp) => {
+            if ((!newBpm || newBpm.trim() === '') && (!newBp || newBp.trim() === '')) {
+                console.warn("Vitals fields cannot be empty.");
+                return;
+            }
+
+            const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
+            const updateData = {};
+
+            if (newBpm && newBpm.trim() !== '') updateData.bpm = newBpm.trim();
+            if (newBp && newBp.trim() !== '') updateData.bp = newBp.trim();
+            
+            // Close the form
+            getEl(`vitals-form-${patientId}`).classList.add('hidden');
+
+            try {
+                if (useMockDb) {
+                    const patientIndex = mockPatients.findIndex(p => p.id === patientId);
+                    if (patientIndex !== -1) {
+                        mockPatients[patientIndex] = { ...mockPatients[patientIndex], ...updateData };
+                        updatePatientLists(mockPatients);
+                    }
+                } else {
+                    await updateDoc(patientRef, updateData);
+                }
+                console.log(`Patient ${patientId} vitals updated.`);
+            } catch (e) {
+                console.error("Error updating patient vitals: ", e);
+            }
+        };
+
+
+        /**
+         * Discharges and archives a patient.
+         */
+        async function handleDischarge(event) {
+            event.preventDefault();
+            const staffName = getEl('discharge-staff-name').value.trim();
+            const dischargeDate = getEl('discharge-date').value;
+
+            if (!modalPatientId || !staffName || !dischargeDate) {
+                console.error("Missing discharge details.");
+                return;
+            }
+
+            const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', modalPatientId);
+            const updateData = {
+                status: 'archive',
+                dischargedBy: staffName,
+                dischargeDate: dischargeDate,
+                timeAtDischarge: useMockDb ? Date.now() : serverTimestamp(),
+            };
+
+            try {
+                if (useMockDb) {
+                    const patientIndex = mockPatients.findIndex(p => p.id === modalPatientId);
+                    if (patientIndex !== -1) {
+                        mockPatients[patientIndex] = { ...mockPatients[patientIndex], ...updateData };
+                        updatePatientLists(mockPatients);
+                    }
+                } else {
+                    await updateDoc(patientRef, updateData);
+                }
+                console.log(`Patient ${modalPatientId} archived.`);
+                window.closeModal();
+                window.setTab('archive');
+            } catch (e) {
+                console.error("Error archiving patient: ", e);
+                // Show message box error if possible, but for simplicity, console log here
+            }
+        }
+
+        /**
+         * Initializes Firebase and handles authentication.
+         */
+        async function initializeFirebase() {
+            if (firebaseConfig) {
+                try {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+
+                    // Sign in with custom token or anonymously
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            isAuthReady = true;
+                            console.log(`Authenticated. User ID: ${userId}`);
+                            setupPatientListener();
+                            startUpdateTimer();
+                        } else {
+                            // Should not happen if token is provided, but handle anonymous fallback
+                            userId = crypto.randomUUID();
+                            isAuthReady = true;
+                            console.log("Signed in anonymously. Using random UUID.");
+                            setupPatientListener();
+                            startUpdateTimer();
+                        }
+                    });
+
+                } catch (e) {
+                    console.error("Firebase initialization failed. Falling back to Mock DB.", e);
+                    useMockDb = true;
+                    isAuthReady = true;
+                    userId = 'MOCK-USER';
+                    setupPatientListener();
+                    startUpdateTimer();
+                }
+            } else {
+                console.error("Firebase config not available. Using Mock DB.");
+                useMockDb = true;
+                isAuthReady = true;
+                userId = 'MOCK-USER';
+                setupPatientListener();
+                startUpdateTimer();
+            }
+        }
+
+        /**
+         * Starts the interval to refresh timers every second.
+         */
+        function startUpdateTimer() {
+            // Clear any existing interval
+            if (updateTimerInterval) clearInterval(updateTimerInterval);
+
+            updateTimerInterval = setInterval(() => {
+                // Only update the timers in the active view
+                let patientsToUpdate = [];
+                if (currentState.activeTab === 'receiving') {
+                    patientsToUpdate = receivingPatients;
+                } else if (currentState.activeTab === 'station') {
+                    patientsToUpdate = stationPatients;
+                }
+
+                patientsToUpdate.forEach(patient => {
+                    const timerEl = getEl(`timer-${patient.id}`);
+                    if (timerEl) {
+                        const timeKey = currentState.activeTab === 'station' ? 'timeAtStation' : 'timeAtEntry';
+                        timerEl.textContent = formatTimeSince(patient[timeKey]);
+                    }
+                });
+                
+                // Also check if the 'receiving' tab button needs to blink
+                const receivingBtn = getEl('btn-receiving');
+                if (receivingBtn && currentState.activeTab !== 'receiving') {
+                    const shouldBlink = receivingPatients.length > 0;
+                    receivingBtn.classList.toggle('blinking-red', shouldBlink);
+                }
+
+            }, 1000); // Update every second
+        }
+
+
+        // --- Event Listeners and Initialization ---
+
+        window.onload = () => {
+            initializeFirebase();
+            render(); // Initial render before data loads
+
+            getEl('language-toggle')?.addEventListener('click', window.toggleLanguage);
+            getEl('patient-entry-form')?.addEventListener('submit', handlePatientEntry);
+            getEl('discharge-form')?.addEventListener('submit', handleDischarge);
+        };
+        
+        // Expose functions to global window scope for inline HTML handlers
+        window.setTab = window.setTab;
+        window.toggleLanguage = window.toggleLanguage;
+        window.openModal = window.openModal;
+        window.closeModal = window.closeModal;
+        // Updated and new exposed functions
+        window.moveToStation = window.moveToStation;
+        window.updateStaffAssignment = window.updateStaffAssignment;
+        window.updatePatientVitals = window.updatePatientVitals;
+
+    </script>
     <style>
         /* Custom font import for a professional look */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
@@ -26,8 +1070,9 @@
         /* CSS for the blinking effect */
         .blinking-red {
             animation: blink-animation 1s steps(5, start) infinite;
-            background-color: #fecaca !important; /* Red-200 */
+            background-color: #fee2e2 !important; /* Red-100 */
             color: #991b1b !important; /* Red-800 */
+            border-color: #f87171 !important; /* Red-400 */
         }
         @keyframes blink-animation {
             to {
@@ -251,1056 +1296,5 @@
     </div>
     <!-- End Discharge Confirmation Modal -->
 
-    <!-- Firebase Imports -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Set Firebase Log Level to Debug
-        setLogLevel('Debug');
-        
-        // --- Global Variables (Provided by Canvas Environment) ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        // Firebase Instances
-        let app, db, auth, userId = null;
-        let isAuthReady = false;
-        let useMockDb = false;
-        
-        // All patients loaded from DB/Mock DB
-        let allPatients = []; 
-        // Derived lists for UI
-        let receivingPatients = []; 
-        let stationPatients = [];
-        let archivedPatients = [];
-        let mockPatients = []; // Mock database for when Firebase is unavailable
-
-        // Mock Staff for assignment feature
-        const mockStaff = [
-            { id: 'DR101', name: 'Dr. Emily Carter', role: 'Doctor' },
-            { id: 'DR102', name: 'Dr. Ben Jones', role: 'Doctor' },
-            { id: 'NR201', name: 'Nurse Lisa Kim', role: 'Nurse' },
-            { id: 'NR202', name: 'Nurse David Chen', role: 'Nurse' },
-        ];
-        
-        // Dictionary for multilingual content
-        // MOVED THIS BLOCK UP TO RESOLVE "Cannot access 'dictionary' before initialization" ERROR
-        const dictionary = {
-            en: {
-                title: "SAMS | Emergency Patient Flow",
-                slogan: "Real-time Clinical Intake & Triage",
-                userIdText: "User ID:",
-                nav: {
-                    home: "Home",
-                    patientEntry: "Patient Entry",
-                    receiving: "Receiving",
-                    station: "Station View",
-                    archive: "Archive",
-                    contact: "Contact"
-                },
-                home: {
-                    heading: "Welcome to SAMS Intake System",
-                    p1: "This interface is designed for rapid patient entry and triage management in the Emergency Room. Please use the Patient Entry tab to log incoming patients immediately.",
-                    p2: "The Receiving tab shows all pending patients awaiting clinical assignment. The Station tab tracks active patients, and the Archive tab holds discharged records. This list is updated in real-time.",
-                },
-                patientEntry: {
-                    heading: "ER Patient Quick Entry",
-                    nameLabel: "Patient Full Name",
-                    dobLabel: "Date of Birth (DOB)",
-                    complaintLabel: "Chief Complaint (Symptoms/Injury)",
-                    vitalsHeading: "Initial Vitals", 
-                    bpmLabel: "BPM (Heart Rate)", 
-                    bpLabel: "Blood Pressure (Sys/Dia)", 
-                    paramedicLabel: "Paramedic/Sending Team Name", 
-                    priorityLabel: "Triage Priority",
-                    priorities: { low: "Low (Scheduled/Stable)", medium: "Medium (Urgent)", high: "High (Critical)" },
-                    submitBtn: "Log Patient Entry",
-                    success: "Patient entry logged successfully. The Receiving team has been notified.",
-                    error: "Error saving patient. Check console for details (Mock DB is active if no Firebase connection).",
-                },
-                receiving: {
-                    heading: "Incoming Patients (Awaiting Triage)",
-                    loading: "Loading patients...",
-                    empty: "No patients currently awaiting triage.",
-                    receiveBtn: "Move to Station", 
-                    priority: "Priority:",
-                    complaint: "Complaint:",
-                    time: "Time:",
-                    submitter: "Submitted by:",
-                    vitals: "Vitals:", 
-                    paramedic: "Paramedic:", 
-                },
-                station: {
-                    heading: "Active Patients (Assigned Station)",
-                    loading: "Loading active patients...",
-                    empty: "No patients currently assigned to a station.",
-                    releaseBtn: "Release Patient / Archive", 
-                    priority: "Priority:",
-                    complaint: "Complaint:",
-                    time: "Time at Station:",
-                    submitter: "Triage/Assignment by:",
-                    assigned: "Assigned:",
-                    assignBtn: "Assign Staff",
-                    unassigned: "Unassigned",
-                    vitals: "Vitals:", 
-                    paramedic: "Paramedic:", 
-                },
-                archive: {
-                    heading: "Archived/Discharged Patients",
-                    loading: "Loading archived records...",
-                    empty: "No patients currently in the archive.",
-                    priority: "Priority:",
-                    complaint: "Complaint:",
-                    time: "Archived:",
-                    dischargedBy: "Discharged by:", 
-                    dischargeDate: "Discharge Date:", 
-                    submitter: "Triage/Assignment by:", 
-                    cleared: "Archive cleared successfully.",
-                    vitals: "Vitals:", 
-                    paramedic: "Paramedic:", 
-                },
-                contact: {
-                    heading: "Contact Us",
-                    addressTitle: "Our Location",
-                    detailsTitle: "General Inquiries",
-                    formTitle: "Send a Message",
-                    namePlaceholder: "Your Name",
-                    emailPlaceholder: "Your Email",
-                    messagePlaceholder: "Your Message",
-                    submitBtn: "Send Message",
-                },
-                modal: { 
-                    title: "Confirm Patient Discharge",
-                    staffLabel: "Staff Name (Doctor/Nurse)",
-                    dateLabel: "Discharge Date",
-                    cancelBtn: "Cancel",
-                    confirmBtn: "Confirm & Archive",
-                    dischargeFailed: "Discharge failed. Please check the form and try again."
-                },
-                footer: {
-                    rights: "All rights reserved."
-                }
-            },
-            de: {
-                title: "SAMS | Notfall Patientenfluss",
-                slogan: "Echtzeit Klinische Aufnahme & Triage",
-                userIdText: "Benutzer-ID:",
-                nav: {
-                    home: "Startseite",
-                    patientEntry: "Patienteneingabe",
-                    receiving: "Empfang",
-                    station: "Stationsansicht",
-                    archive: "Archiv",
-                    contact: "Kontakt"
-                },
-                home: {
-                    heading: "Willkommen beim SAMS Aufnahmesystem",
-                    p1: "Diese Oberfläche dient der schnellen Patientenaufnahme und dem Triage-Management in der Notaufnahme. Bitte verwenden Sie den Reiter Patienteneingabe, um eintreffende Patienten sofort zu protokollieren.",
-                    p2: "Der Empfangs-Reiter zeigt alle ausstehenden Patienten an, die auf eine klinische Zuweisung warten. Der Stations-Reiter verfolgt aktive Patienten, und das Archiv enthält entlassene Aufzeichnungen. Diese Listen werden in Echtzeit aktualisiert.",
-                },
-                patientEntry: {
-                    heading: "Notfall Patientenschnelleingabe",
-                    nameLabel: "Voller Name des Patienten",
-                    dobLabel: "Geburtsdatum (Geb.)",
-                    complaintLabel: "Hauptbeschwerde (Symptome/Verletzung)",
-                    vitalsHeading: "Anfangsvitalwerte", 
-                    bpmLabel: "BPM (Herzfrequenz)", 
-                    bpLabel: "Blutdruck (Sys/Dia)", 
-                    paramedicLabel: "Name des Notarztes/Teams", 
-                    priorityLabel: "Triage-Priorität",
-                    priorities: { low: "Niedrig (Geplant/Stabil)", medium: "Mittel (Dringend)", high: "Hoch (Kritisch)" },
-                    submitBtn: "Patienteneintrag Protokollieren",
-                    success: "Patienteneintrag erfolgreich protokolliert. Das Empfangsteam wurde benachrichtigt.",
-                    error: "Fehler beim Speichern des Patienten. Überprüfen Sie die Konsole (Mock-Datenbank ist aktiv, wenn keine Firebase-Verbindung besteht).",
-                },
-                receiving: {
-                    heading: "Eintreffende Patienten (Warten auf Triage)",
-                    loading: "Patienten werden geladen...",
-                    empty: "Derzeit warten keine Patienten auf die Triage.",
-                    receiveBtn: "Auf Station Verschieben", 
-                    priority: "Priorität:",
-                    complaint: "Beschwerde:",
-                    time: "Zeit:",
-                    submitter: "Eingereicht von:",
-                    vitals: "Vitalwerte:", 
-                    paramedic: "Notarzt/Team:", 
-                },
-                station: {
-                    heading: "Aktive Patienten (Zugewiesene Station)",
-                    loading: "Aktive Patienten werden geladen...",
-                    empty: "Derzeit ist kein Patient einer Station zugewiesen.",
-                    releaseBtn: "Patient Entlassen / Archiv",
-                    priority: "Priorität:",
-                    complaint: "Beschwerde:",
-                    time: "Zeit auf Station:",
-                    submitter: "Triage/Zuweisung durch:",
-                    assigned: "Zugewiesen:",
-                    assignBtn: "Mitarbeiter Zuweisen",
-                    unassigned: "Nicht Zugewiesen",
-                    vitals: "Vitalwerte:", 
-                    paramedic: "Notarzt/Team:", 
-                },
-                archive: {
-                    heading: "Archivierte/Entlassene Patienten",
-                    loading: "Archivierte Aufzeichnungen werden geladen...",
-                    empty: "Derzeit keine Patienten im Archiv.",
-                    priority: "Priorität:",
-                    complaint: "Beschwerde:",
-                    time: "Archiviert:",
-                    dischargedBy: "Entlassen durch:",
-                    dischargeDate: "Entlassungsdatum:",
-                    submitter: "Triage/Zuweisung durch:",
-                    cleared: "Archiv erfolgreich gelöscht.",
-                    vitals: "Vitalwerte:", 
-                    paramedic: "Notarzt/Team:", 
-                },
-                contact: {
-                    heading: "Kontaktieren Sie uns",
-                    addressTitle: "Unser Standort",
-                    detailsTitle: "Allgemeine Anfragen",
-                    formTitle: "Nachricht senden",
-                    namePlaceholder: "Ihr Name",
-                    emailPlaceholder: "Ihre E-Mail",
-                    messagePlaceholder: "Ihre Nachricht",
-                    submitBtn: "Nachricht senden",
-                },
-                modal: { 
-                    title: "Bestätigung der Patientenentlassung",
-                    staffLabel: "Mitarbeitername (Arzt/Krankenschwester)",
-                    dateLabel: "Entlassungsdatum",
-                    cancelBtn: "Abbrechen",
-                    confirmBtn: "Bestätigen & Archivieren",
-                    dischargeFailed: "Entlassung fehlgeschlagen. Bitte überprüfen Sie das Formular und versuchen Sie es erneut."
-                },
-                footer: {
-                    rights: "Alle Rechte vorbehalten."
-                }
-            }
-        };
-
-        // --- Core Application State & Logic ---
-        
-        const tabs = ['home', 'patientEntry', 'receiving', 'station', 'archive', 'contact'];
-        
-        // Load initial state from localStorage or use defaults
-        const savedLang = localStorage.getItem('samsAppLanguage');
-        const savedTab = localStorage.getItem('samsAppActiveTab');
-
-        let currentState = {
-            // Load language, default to 'en' if not found or invalid
-            language: (savedLang && dictionary[savedLang]) ? savedLang : 'en', 
-            // Load active tab, default to 'home' if not found or invalid
-            activeTab: (savedTab && tabs.includes(savedTab)) ? savedTab : 'home'
-        };
-        
-        // State for the modal
-        let modalPatientId = null;
-
-        // Utility to format date to YYYY-MM-DD
-        const getTodayDateString = () => {
-            const today = new Date();
-            const yyyy = today.getFullYear();
-            const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months start at 0!
-            const dd = String(today.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
-        };
-
-        // Utility to safely retrieve DOM elements
-        const getEl = (id) => document.getElementById(id);
-
-        /**
-         * Renders the UI elements based on the current state (language and activeTab).
-         */
-        function render() {
-            const lang = currentState.language;
-            const content = dictionary[lang];
-            const activeTab = currentState.activeTab;
-
-            // 1. Update Global Text Elements
-            document.title = content.title;
-            getEl('header-slogan').textContent = content.slogan;
-            getEl('page-title').textContent = content.title.split(' | ')[0];
-            getEl('current-lang-text').textContent = lang.toUpperCase();
-            getEl('user-id-text').textContent = content.userIdText;
-            
-            // Update User ID Display
-            const userIdDisplay = getEl('user-id-display');
-            if(userIdDisplay) {
-                userIdDisplay.textContent = userId || 'Loading...';
-            }
-
-            // 2. Determine if Receiving Tab needs to blink (unreceived patients exist)
-            const shouldBlink = activeTab !== 'receiving' && receivingPatients.length > 0;
-
-            // 3. Render Navigation Tabs
-            const tabNav = getEl('tab-nav');
-            tabNav.innerHTML = tabs.map(tab => {
-                const isActive = tab === activeTab;
-                let baseClasses = "tab-btn px-3 py-2 sm:px-4 sm:py-2 text-sm font-medium rounded-lg transition duration-200 cursor-pointer whitespace-nowrap";
-                let activeClasses = "bg-blue-600 text-white shadow-lg";
-                let inactiveClasses = "text-gray-700 hover:bg-gray-100";
-                
-                // Add blinking class if conditions met
-                if (tab === 'receiving' && shouldBlink) {
-                    baseClasses += ' blinking-red';
-                    inactiveClasses = "text-red-800 hover:bg-red-100";
-                }
-
-                return `
-                    <button id="btn-${tab}" data-tab="${tab}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}" onclick="window.setTab('${tab}')">
-                        ${content.nav[tab]}
-                    </button>
-                `;
-            }).join('');
-
-            // 4. Update Content Sections and Visibility
-            tabs.forEach(tab => {
-                const tabEl = getEl(`tab-${tab}`);
-                if (tabEl) {
-                    tabEl.classList.toggle('hidden', tab !== activeTab);
-                }
-            });
-
-            // Home Tab Content
-            getEl('home-heading').textContent = content.home.heading;
-            getEl('home-paragraph-1').textContent = content.home.p1;
-            getEl('home-paragraph-2').textContent = content.home.p2;
-
-            // Patient Entry Tab Content (Update labels and options)
-            getEl('patientEntry-heading').innerHTML = `<span data-lucide="user-plus" class="w-6 h-6 mr-2 text-green-600"></span>${content.patientEntry.heading}`;
-            getEl('p-name-label').textContent = content.patientEntry.nameLabel;
-            getEl('p-dob-label').textContent = content.patientEntry.dobLabel;
-            getEl('p-complaint-label').textContent = content.patientEntry.complaintLabel;
-            
-            // NEW VITALS LABELS
-            getEl('vitals-heading').innerHTML = `<span data-lucide="heart-pulse" class="w-5 h-5 mr-2 text-red-500"></span>${content.patientEntry.vitalsHeading}`;
-            getEl('p-bpm-label').textContent = content.patientEntry.bpmLabel;
-            getEl('p-bp-label').textContent = content.patientEntry.bpLabel;
-            // NEW PARAMEDIC LABEL
-            getEl('p-paramedic-label').textContent = content.patientEntry.paramedicLabel;
-
-            getEl('p-priority-label').textContent = content.patientEntry.priorityLabel;
-            getEl('patientEntry-submit-btn').textContent = content.patientEntry.submitBtn;
-
-            const prioritySelect = getEl('p-priority');
-            if (prioritySelect.options.length === 0 || prioritySelect.options[0].value !== 'low') {
-                prioritySelect.innerHTML = Object.entries(content.patientEntry.priorities).map(([key, value]) => 
-                    `<option value="${key}" ${key === 'medium' ? 'selected' : ''}>${value}</option>`
-                ).join('');
-            }
-
-            // Modal Content (Update labels and buttons)
-            getEl('modal-title').innerHTML = `<span data-lucide="shield-check" class="w-6 h-6 mr-2 text-blue-600"></span>${content.modal.title}`;
-            getEl('modal-staff-label').textContent = content.modal.staffLabel;
-            getEl('modal-date-label').textContent = content.modal.dateLabel;
-            getEl('modal-cancel-btn').textContent = content.modal.cancelBtn;
-            getEl('modal-confirm-btn').textContent = content.modal.confirmBtn;
-
-
-            // Dynamic Content Rendering
-            if (activeTab === 'receiving') renderPatientList(receivingPatients, 'receiving', content);
-            if (activeTab === 'station') renderPatientList(stationPatients, 'station', content);
-            if (activeTab === 'archive') renderPatientList(archivedPatients, 'archive', content);
-
-            // Contact Tab Content (Remains same)
-            getEl('contact-heading').innerHTML = `<span data-lucide="mail" class="w-6 h-6 mr-2 text-gray-600"></span>${content.contact.heading}`;
-            getEl('contact-address-title').textContent = content.contact.addressTitle;
-            getEl('contact-details-title').textContent = content.contact.detailsTitle;
-            getEl('contact-form-title').textContent = content.contact.formTitle;
-            getEl('contact-name-placeholder').placeholder = content.contact.namePlaceholder;
-            getEl('contact-email-placeholder').placeholder = content.contact.emailPlaceholder;
-            getEl('contact-message-placeholder').placeholder = content.contact.messagePlaceholder;
-            getEl('contact-submit-btn').textContent = content.contact.submitBtn;
-
-            // Footer
-            getEl('footer-year').textContent = new Date().getFullYear();
-            getEl('footer-rights').textContent = content.footer.rights;
-            
-            // Re-render Lucide icons
-            lucide.createIcons();
-        }
-
-        /**
-         * Renders a list of patients in the specified tab based on the provided data.
-         * @param {Array<Object>} listData - The patient array (receiving, station, or archive).
-         * @param {string} tabId - The ID of the tab ('receiving', 'station', 'archive').
-         * @param {object} content - The dictionary content for the current language.
-         */
-        function renderPatientList(listData, tabId, content) {
-            const container = getEl(`${tabId}-list-container`);
-            const tabContent = content[tabId];
-            if (!container) return; 
-
-            if (!isAuthReady) {
-                container.innerHTML = `<div class="text-center text-gray-500 italic p-4">${tabContent.loading}</div>`;
-                return;
-            }
-            
-            if (listData.length === 0) {
-                container.innerHTML = `<p class="text-center text-gray-500 italic p-4">${tabContent.empty}</p>`;
-                return;
-            }
-
-            container.innerHTML = listData.map(entry => {
-                const priorityClass = {
-                    high: 'bg-red-100 text-red-800 border-red-400',
-                    medium: 'bg-yellow-100 text-yellow-800 border-yellow-400',
-                    low: 'bg-green-100 text-green-800 border-green-400'
-                }[entry.priority] || 'bg-gray-100 text-gray-800 border-gray-400';
-
-                const displayPriority = content.patientEntry.priorities[entry.priority] || entry.priority;
-                
-                // Determine Time, Submitter, and Button based on state
-                let timeLabel, submitterId, buttonText, buttonAction, buttonClass, submitterLabel, extraInfo = '';
-
-                if (tabId === 'receiving') {
-                    timeLabel = content.receiving.time;
-                    submitterLabel = content.receiving.submitter;
-                    submitterId = entry.submitterId;
-                    buttonText = content.receiving.receiveBtn;
-                    buttonAction = `window.moveToStation('${entry.id}')`;
-                    buttonClass = 'bg-red-600 hover:bg-red-700';
-                } else if (tabId === 'station') {
-                    timeLabel = content.station.time;
-                    submitterLabel = content.station.submitter;
-                    submitterId = entry.receiverId || 'N/A';
-                    buttonText = content.station.releaseBtn;
-                    // Modified action to open modal
-                    buttonAction = `window.openDischargeModal('${entry.id}', '${entry.name}')`;
-                    buttonClass = 'bg-blue-600 hover:bg-blue-700';
-
-                    // --- STAFF ASSIGNMENT UI ---
-                    const assignedStaff = entry.assignedStaffName ? 
-                        `${entry.assignedStaffName} (${entry.assignedStaffRole})` : 
-                        content.station.unassigned;
-                    
-                    const assignedStaffColor = entry.assignedStaffName ? 'text-blue-700 font-semibold' : 'text-gray-500 italic';
-
-                    extraInfo = `
-                        <div class="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0 sm:space-x-4">
-                            <p class="text-sm">
-                                <span class="font-semibold">${content.station.assigned}</span> 
-                                <span class="${assignedStaffColor}">${assignedStaff}</span>
-                            </p>
-                            <div class="flex items-center space-x-2">
-                                <select id="staff-select-${entry.id}" class="p-2 border border-gray-300 rounded-lg text-xs sm:text-sm bg-white">
-                                    <option value="">-- Select Staff --</option>
-                                    ${mockStaff.map(staff => `<option value="${staff.id}" data-role="${staff.role}" ${entry.assignedStaffId === staff.id ? 'selected' : ''}>${staff.name} (${staff.role})</option>`).join('')}
-                                </select>
-                                <button onclick="window.assignStaff('${entry.id}')" 
-                                        class="px-3 py-2 text-white font-medium rounded-lg text-xs bg-green-600 hover:bg-green-700 transition duration-200 shadow-sm">
-                                    <span data-lucide="user-check" class="w-4 h-4 inline-block mr-1"></span>
-                                    ${content.station.assignBtn}
-                                </button>
-                            </div>
-                        </div>
-                    `;
-
-                } else { // archive
-                    timeLabel = content.archive.time;
-                    submitterLabel = content.archive.submitter;
-                    submitterId = entry.receiverId || 'N/A';
-                    buttonText = 'Record Archived';
-                    buttonAction = `console.log('Record is safe from deletion (for now).')`;
-                    buttonClass = 'bg-gray-500 cursor-default';
-                    
-                    // Display who was assigned before archive
-                    const assignedStaff = entry.assignedStaffName ? 
-                        `${entry.assignedStaffName} (${entry.assignedStaffRole})` : 
-                        content.station.unassigned;
-
-                    // Display discharge info
-                    const dischargeName = entry.releaserName || content.archive.dischargedBy + ' N/A';
-                    const dischargeDate = entry.dischargeDate || 'N/A';
-
-
-                    extraInfo = `
-                        <p class="text-xs text-gray-700 mt-2 font-semibold">
-                            ${content.archive.dischargedBy} <span class="font-normal text-gray-600">${dischargeName}</span>
-                        </p>
-                        <p class="text-xs text-gray-700">
-                            ${content.archive.dischargeDate} <span class="font-normal text-gray-600">${dischargeDate}</span>
-                        </p>
-                        <p class="text-xs text-gray-500 mt-1">
-                            <span class="font-semibold">${content.station.assigned}</span> ${assignedStaff}
-                        </p>
-                    `;
-                }
-
-                // Vitals and Paramedic Information (NEW)
-                const vitalsText = (entry.bpm || 'N/A') + ' BPM / ' + (entry.bp || 'N/A');
-                const paramedicText = entry.paramedicName || 'N/A';
-
-                const vitalsDisplay = `
-                    <div class="text-sm text-gray-700 mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <p class="font-semibold text-gray-800 mb-1">${tabContent.vitals} <span class="font-normal text-red-600">${vitalsText}</span></p>
-                        <p class="font-semibold text-gray-800">${tabContent.paramedic} <span class="font-normal text-gray-600">${paramedicText}</span></p>
-                    </div>
-                `;
-
-                // Handle timestamp formatting
-                let timestampField;
-                if (tabId === 'archive') timestampField = entry.archivedAt;
-                else if (tabId === 'station') timestampField = entry.receivedAt;
-                else timestampField = entry.timestamp;
-
-                let timeStr = 'N/A';
-                if (timestampField && timestampField.seconds) {
-                    timeStr = new Date(timestampField.seconds * 1000).toLocaleTimeString(currentState.language, { hour: '2-digit', minute: '2-digit' });
-                } else if (timestampField instanceof Date) {
-                    timeStr = timestampField.toLocaleTimeString(currentState.language, { hour: '2-digit', minute: '2-digit' });
-                }
-
-                const submitterDisplay = (submitterId || 'unknown').substring(0, 8) + '...';
-                
-                return `
-                    <div class="patient-card p-4 border-l-4 ${priorityClass} rounded-lg shadow-md flex justify-between items-start flex-col space-y-3">
-                        <div class="w-full">
-                            <h3 class="text-xl font-bold mb-1">${entry.name} <span class="text-sm font-normal text-gray-600">(${entry.dob})</span></h3>
-                            <p class="text-sm font-semibold mb-2 ${priorityClass.split(' ')[1]}">
-                                ${content.receiving.priority} ${displayPriority}
-                            </p>
-                            <p class="text-sm text-gray-700">
-                                <span class="font-semibold">${content.receiving.complaint}</span> ${entry.chiefComplaint}
-                            </p>
-                            ${vitalsDisplay}
-                            <div class="text-xs text-gray-500 mt-3 space-x-4">
-                                <span>${timeLabel} ${timeStr}</span>
-                                <span>| ${submitterLabel} ${submitterDisplay}</span>
-                                ${useMockDb ? '<span class="text-red-500 font-bold ml-4">(MOCK DB ACTIVE)</span>' : ''}
-                            </div>
-                            ${extraInfo}
-                        </div>
-                        <button onclick="${buttonAction}" 
-                                class="w-full sm:w-auto mt-2 px-4 py-2 text-white font-medium rounded-lg transition duration-200 shadow-md ${buttonClass}"
-                                ${tabId === 'archive' ? 'disabled' : ''}>
-                            ${buttonText}
-                        </button>
-                    </div>
-                `;
-            }).join('');
-            lucide.createIcons(); // Re-create icons for new buttons/info
-        }
-
-        /**
-         * Changes the active tab and re-renders the UI.
-         * @param {string} tabId - The ID of the tab to switch to.
-         */
-        window.setTab = function(tabId) {
-            if (currentState.activeTab !== tabId) {
-                currentState.activeTab = tabId;
-                // PERSISTENCE: Save the active tab to local storage
-                localStorage.setItem('samsAppActiveTab', tabId); 
-                render();
-            }
-        };
-
-        /**
-         * Toggles the language between English ('en') and German ('de').
-         */
-        function toggleLanguage() {
-            currentState.language = currentState.language === 'en' ? 'de' : 'en';
-            // PERSISTENCE: Save the language to local storage
-            localStorage.setItem('samsAppLanguage', currentState.language);
-            render();
-        }
-
-        // --- MODAL FUNCTIONS ---
-
-        /**
-         * Opens the discharge modal for a specific patient.
-         */
-        window.openDischargeModal = function(patientId, patientName) {
-            modalPatientId = patientId;
-            const modalEl = getEl('discharge-modal');
-            
-            getEl('modal-patient-name').textContent = dictionary[currentState.language].modal.title.replace('Patient Discharge', patientName + ' Discharge');
-            getEl('discharge-staff-name').value = ''; // Clear previous entry
-            getEl('discharge-date').value = getTodayDateString(); // Set default date
-
-            modalEl.classList.remove('hidden', 'opacity-0');
-            modalEl.classList.add('opacity-100');
-            getEl('discharge-form').addEventListener('submit', handleDischargeConfirmation, { once: true });
-        };
-
-        /**
-         * Closes the modal.
-         */
-        window.closeModal = function() {
-            const modalEl = getEl('discharge-modal');
-            modalEl.classList.remove('opacity-100');
-            modalEl.classList.add('opacity-0');
-            setTimeout(() => {
-                modalEl.classList.add('hidden');
-                modalPatientId = null;
-            }, 300);
-        };
-
-        /**
-         * Handles the submission of the discharge form (the modal).
-         */
-        async function handleDischargeConfirmation(e) {
-            e.preventDefault();
-            
-            if (!modalPatientId) {
-                console.error("No patient ID associated with the modal.");
-                window.closeModal();
-                return;
-            }
-
-            const staffName = getEl('discharge-staff-name').value.trim();
-            const dischargeDate = getEl('discharge-date').value;
-
-            if (!staffName || !dischargeDate) {
-                console.error(dictionary[currentState.language].modal.dischargeFailed);
-                // Re-attach listener if validation failed and user tries again
-                getEl('discharge-form').addEventListener('submit', handleDischargeConfirmation, { once: true });
-                return;
-            }
-
-            // Perform the patient release/archive operation
-            await releasePatient(modalPatientId, staffName, dischargeDate);
-            
-            window.closeModal();
-        }
-
-        // --- MOCK DB FUNCTIONS (Fallback when Firebase is unavailable) ---
-
-        /**
-         * Filters the mock database into the three main state arrays.
-         */
-        function filterPatients(patients) {
-            receivingPatients = patients.filter(p => p.state === 'receiving');
-            stationPatients = patients.filter(p => p.state === 'station');
-            archivedPatients = patients.filter(p => p.state === 'archived');
-            
-            // Sort by time, newest first
-            receivingPatients.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-            stationPatients.sort((a, b) => b.receivedAt?.getTime() - a.receivedAt?.getTime());
-            archivedPatients.sort((a, b) => b.archivedAt?.getTime() - a.archivedAt?.getTime());
-        }
-
-        /**
-         * Simulates the Firestore onSnapshot listener for all patients.
-         */
-        function setupMockListener() {
-            filterPatients(mockPatients);
-            render();
-        }
-
-        /**
-         * Adds a new patient entry to the mock database.
-         */
-        function addMockPatientEntry(patientData) {
-            const newEntry = {
-                id: crypto.randomUUID(),
-                ...patientData,
-                state: 'receiving', // New state field
-                timestamp: new Date(),
-                submitterId: userId
-            };
-            mockPatients.push(newEntry);
-            setupMockListener(); 
-        }
-
-        /**
-         * Moves a patient from 'receiving' to 'station' in the mock database.
-         */
-        function moveToMockStation(patientId) {
-            const patient = mockPatients.find(p => p.id === patientId);
-            if (patient && patient.state === 'receiving') {
-                patient.state = 'station';
-                patient.receivedAt = new Date(); // Timestamp for moving to station
-                patient.receiverId = userId;
-                setupMockListener(); 
-            }
-        }
-        
-        /**
-         * Releases a patient from 'station' to 'archived' in the mock database.
-         */
-        function releaseMockPatient(patientId, staffName, dischargeDate) {
-            const patient = mockPatients.find(p => p.id === patientId);
-            if (patient && patient.state === 'station') {
-                patient.state = 'archived';
-                patient.archivedAt = new Date(); // Timestamp for archiving
-                patient.releaserId = userId;
-                // NEW DISCHARGE FIELDS
-                patient.releaserName = staffName;
-                patient.dischargeDate = dischargeDate;
-                setupMockListener(); 
-            }
-        }
-
-        /**
-         * Assigns staff in the mock database.
-         */
-        function assignMockStaff(patientId, staffId, staffName, staffRole) {
-            const patient = mockPatients.find(p => p.id === patientId);
-            if (patient && patient.state === 'station') {
-                patient.assignedStaffId = staffId;
-                patient.assignedStaffName = staffName;
-                patient.assignedStaffRole = staffRole;
-                setupMockListener(); 
-            }
-        }
-
-        /**
-         * Clears old archived patients from the mock database. (1 hour threshold for real app, using 1 minute for easy testing of logic)
-         */
-        function clearOldMockArchives() {
-            // Using 1 minute (60000ms) for demo purposes, but simulating the hourly action
-            const ONE_HOUR_MS_MOCK = 60000; 
-            const oneHourAgo = new Date(Date.now() - ONE_HOUR_MS_MOCK); 
-            
-            const initialCount = mockPatients.length;
-            mockPatients = mockPatients.filter(p => 
-                p.state !== 'archived' || (p.archivedAt && p.archivedAt.getTime() > oneHourAgo.getTime())
-            );
-            
-            const deletedCount = initialCount - mockPatients.length;
-            if (deletedCount > 0) {
-                console.log(`[Mock DB Cleanup] Cleared ${deletedCount} archived patient records.`);
-                setupMockListener();
-                localStorage.setItem('samsLastArchiveCheck', Date.now()); // Update check time
-            }
-        }
-
-
-        // --- FIREBASE FUNCTIONS ---
-
-        async function initializeFirebase() {
-            if (!firebaseConfig) {
-                console.error("Firebase config is missing. Switching to Mock Database.");
-                useMockDb = true;
-                isAuthReady = true;
-                userId = 'MOCK-USER-' + Math.random().toString(36).substring(2, 10);
-                setupMockListener();
-                render();
-                // Start mock archive clearance check (using 1 minute for demo)
-                setInterval(clearOldMockArchives, 60000);
-                // Run check once on load if overdue
-                if (Date.now() - (localStorage.getItem('samsLastArchiveCheck') || 0) > 60000) {
-                    clearOldMockArchives();
-                }
-                return;
-            }
-
-            try {
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                const signInPromise = new Promise((resolve) => {
-                    onAuthStateChanged(auth, async (user) => {
-                        if (user) {
-                            userId = user.uid;
-                        } else {
-                            if (initialAuthToken) {
-                                await signInWithCustomToken(auth, initialAuthToken);
-                            } else {
-                                await signInAnonymously(auth);
-                            }
-                            userId = auth.currentUser?.uid || crypto.randomUUID();
-                        }
-                        isAuthReady = true;
-                        
-                        const userIdDisplay = getEl('user-id-display');
-                        if(userIdDisplay) { userIdDisplay.textContent = userId; }
-
-                        render(); 
-                        resolve();
-                    });
-                });
-                
-                await signInPromise;
-
-                if (db && isAuthReady) {
-                    setupRealtimeListener(db);
-                }
-
-            } catch (e) {
-                console.error("Error initializing Firebase or Auth:", e);
-                useMockDb = true;
-                isAuthReady = true;
-                userId = 'MOCK-USER-' + Math.random().toString(36).substring(2, 10);
-                setupMockListener();
-                render();
-            }
-
-            // Start automated archive clearance logic (1 hour interval)
-            const ONE_HOUR_MS = 60 * 60 * 1000;
-            setInterval(clearOldArchives, ONE_HOUR_MS);
-            
-            // Run check once on load if the last check was more than an hour ago
-            if (Date.now() - (localStorage.getItem('samsLastArchiveCheck') || 0) > ONE_HOUR_MS) {
-                clearOldArchives();
-            }
-        }
-        
-        /**
-         * Sets up the real-time listener for all ER patient entries.
-         * @param {Firestore} firestore - The Firestore instance.
-         */
-        function setupRealtimeListener(firestore) {
-            const collectionPath = `artifacts/${appId}/public/data/er_patients`;
-            const patientsCollection = collection(firestore, collectionPath);
-            
-            const q = query(patientsCollection); 
-
-            onSnapshot(q, (snapshot) => {
-                allPatients = [];
-                snapshot.forEach((doc) => {
-                    allPatients.push({ id: doc.id, ...doc.data() });
-                });
-                
-                filterPatients(allPatients);
-                render();
-            }, (error) => {
-                console.error("Error listening to patients data: ", error);
-            });
-        }
-
-        /**
-         * Adds a new patient entry to Firestore or the Mock DB.
-         */
-        async function addPatientEntry(patientData) {
-            const msgBox = getEl('patient-message-box');
-            const content = dictionary[currentState.language].patientEntry;
-
-            if (useMockDb) {
-                addMockPatientEntry(patientData);
-                msgBox.textContent = content.success;
-                msgBox.className = 'mt-4 p-3 rounded-lg text-center bg-green-100 text-green-800';
-                setTimeout(() => msgBox.classList.add('hidden'), 3000);
-                document.getElementById('patient-entry-form').reset(); 
-                msgBox.classList.remove('hidden');
-                return;
-            }
-
-            if (!db || !userId) {
-                console.error("Database not ready. Cannot add patient.");
-                msgBox.textContent = content.error;
-                msgBox.className = 'mt-4 p-3 rounded-lg text-center bg-red-100 text-red-800';
-                msgBox.classList.remove('hidden');
-                return;
-            }
-            
-            const collectionPath = `artifacts/${appId}/public/data/er_patients`;
-
-            try {
-                await addDoc(collection(db, collectionPath), {
-                    ...patientData,
-                    state: 'receiving', // Initial state
-                    timestamp: serverTimestamp(),
-                    submitterId: userId
-                });
-                
-                msgBox.textContent = content.success;
-                msgBox.className = 'mt-4 p-3 rounded-lg text-center bg-green-100 text-green-800';
-                setTimeout(() => msgBox.classList.add('hidden'), 3000);
-                document.getElementById('patient-entry-form').reset(); 
-                msgBox.classList.remove('hidden');
-
-            } catch (e) {
-                msgBox.textContent = content.error;
-                msgBox.className = 'mt-4 p-3 rounded-lg text-center bg-red-100 text-red-800';
-                msgBox.classList.remove('hidden');
-                console.error("Error adding document to Firebase: ", e);
-            }
-        }
-        
-        /**
-         * Updates a patient entry's status from 'receiving' to 'station'.
-         */
-        window.moveToStation = async function(patientId) {
-            if (useMockDb) {
-                moveToMockStation(patientId);
-                return;
-            }
-
-            if (!db) return console.error("Database not ready. Cannot move patient to station.");
-
-            const docPath = `artifacts/${appId}/public/data/er_patients/${patientId}`;
-            try {
-                await updateDoc(doc(db, docPath), {
-                    state: 'station',
-                    receivedAt: serverTimestamp(),
-                    receiverId: userId // Triage/Assignment officer
-                });
-                window.setTab('station'); // Automatically switch to the station view
-            } catch (e) {
-                console.error("Error updating patient status to station: ", e);
-            }
-        };
-
-        /**
-         * Updates a patient entry's status from 'station' to 'archived'.
-         * Now requires staffName and dischargeDate.
-         */
-        async function releasePatient(patientId, staffName, dischargeDate) {
-            if (useMockDb) {
-                releaseMockPatient(patientId, staffName, dischargeDate);
-                return;
-            }
-
-            if (!db) return console.error("Database not ready. Cannot release patient.");
-
-            const docPath = `artifacts/${appId}/public/data/er_patients/${patientId}`;
-            try {
-                await updateDoc(doc(db, docPath), {
-                    state: 'archived',
-                    archivedAt: serverTimestamp(),
-                    releaserId: userId, // Discharge officer ID
-                    releaserName: staffName, // NEW
-                    dischargeDate: dischargeDate // NEW
-                });
-                window.setTab('archive'); // Automatically switch to the archive view
-            } catch (e) {
-                console.error("Error updating patient status to archived: ", e);
-            }
-        };
-
-        /**
-         * Assigns a staff member to a patient on the station.
-         */
-        window.assignStaff = async function(patientId) {
-            const selectEl = getEl(`staff-select-${patientId}`);
-            if (!selectEl || !selectEl.value) {
-                console.warn("Please select a staff member before assigning.");
-                return;
-            }
-
-            const selectedStaffId = selectEl.value;
-            const selectedStaffOption = mockStaff.find(s => s.id === selectedStaffId);
-            
-            if (!selectedStaffOption) {
-                 console.error("Invalid staff selected.");
-                 return;
-            }
-
-            const { name, role } = selectedStaffOption;
-
-            if (useMockDb) {
-                assignMockStaff(patientId, selectedStaffId, name, role);
-                return;
-            }
-
-            if (!db) return console.error("Database not ready. Cannot assign staff.");
-
-            const docPath = `artifacts/${appId}/public/data/er_patients/${patientId}`;
-            try {
-                await updateDoc(doc(db, docPath), {
-                    assignedStaffId: selectedStaffId,
-                    assignedStaffName: name,
-                    assignedStaffRole: role
-                });
-                console.log(`Staff ${name} assigned to patient ${patientId}`);
-            } catch (e) {
-                console.error("Error assigning staff: ", e);
-            }
-        };
-
-        /**
-         * Clears archived documents older than 1 hour.
-         * Runs on a timer/page load check.
-         */
-        async function clearOldArchives() {
-            const ONE_HOUR_MS = 60 * 60 * 1000;
-            const cutoffTime = Date.now() - ONE_HOUR_MS;
-            const collectionPath = `artifacts/${appId}/public/data/er_patients`;
-            
-            // Check if Firebase is ready or if we are using mock DB
-            if (useMockDb) {
-                clearOldMockArchives();
-                return;
-            }
-            
-            if (!db) return console.error("Database not ready. Cannot run archive clearance.");
-
-            console.log(`[Archive Cleanup] Checking for records archived before: ${new Date(cutoffTime).toLocaleTimeString()}`);
-            
-            let deletedCount = 0;
-            const deletePromises = [];
-
-            // Filter for archived patients older than the cutoff time
-            const patientsToDelete = allPatients.filter(p => 
-                p.state === 'archived' && p.archivedAt && (p.archivedAt.seconds * 1000) < cutoffTime
-            );
-
-            if (patientsToDelete.length > 0) {
-                console.log(`[Archive Cleanup] Found ${patientsToDelete.length} records to delete...`);
-                
-                patientsToDelete.forEach(patient => {
-                    const docRef = doc(db, collectionPath, patient.id);
-                    deletePromises.push(deleteDoc(docRef).then(() => {
-                        deletedCount++;
-                    }).catch(e => {
-                        console.error(`Error deleting doc ${patient.id}:`, e);
-                    }));
-                });
-
-                await Promise.all(deletePromises);
-                console.log(`[Archive Cleanup] Successfully deleted ${deletedCount} records.`);
-                localStorage.setItem('samsLastArchiveCheck', Date.now());
-            } else {
-                console.log("[Archive Cleanup] No old records found to delete.");
-            }
-        }
-
-
-        // --- Event Listeners and Initialization ---
-
-        getEl('language-toggle').addEventListener('click', toggleLanguage);
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeFirebase(); 
-
-            // Simple contact form submission handler (prevents page reload)
-            const contactForm = getEl('tab-contact').querySelector('form');
-            contactForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const submitBtn = getEl('contact-submit-btn');
-                const originalText = submitBtn.textContent;
-                
-                submitBtn.textContent = currentState.language === 'en' ? 'Message Sent! Thank you.' : 'Nachricht gesendet! Danke.';
-                submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-                submitBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-                
-                setTimeout(() => {
-                    submitBtn.textContent = originalText;
-                    submitBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
-                    submitBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                    contactForm.reset();
-                }, 3000);
-            });
-
-            // Patient Entry form handler
-            const patientForm = getEl('patient-entry-form');
-            patientForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-
-                // Collect all new and existing fields
-                const patientData = {
-                    name: getEl('p-name').value,
-                    dob: getEl('p-dob').value,
-                    chiefComplaint: getEl('p-complaint').value,
-                    priority: getEl('p-priority').value,
-                    // NEW FIELDS
-                    bpm: getEl('p-bpm').value,
-                    bp: getEl('p-bp').value,
-                    paramedicName: getEl('p-paramedic').value,
-                };
-                
-                addPatientEntry(patientData);
-            });
-            
-            // Set the default date for the modal form on load
-            getEl('discharge-date').value = getTodayDateString();
-        });
-    </script>
 </body>
-</html>
+</h
