@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SAMS | Emergency Patient Flow</title>
-    <!-- Load Firebase/Tailwind/Icons -->
+    <!-- Load Firebase/Tailwind/Icons/Tone.js -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
     <!-- Firebase Imports -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -35,6 +36,9 @@
         let mockPatients = []; // Mock database for when Firebase is unavailable
         let updateTimerInterval; // Interval for real-time timer updates
 
+        // Tone.js Synth for the Bell Alert
+        let alertSynth = null; 
+        
         // Mock Staff for assignment feature
         const mockStaff = [
             { id: 'DR101', name: 'Dr. Emily Carter', role: 'Doctor' },
@@ -273,6 +277,32 @@
         // State for the modal
         let modalPatientId = null;
 
+        /**
+         * Initializes the Tone.js Synth for the bell alert.
+         */
+        function initializeAudio() {
+            try {
+                if (Tone) {
+                    // Use a simple FM Synth to emulate a metallic bell sound
+                    alertSynth = new Tone.FMSynth().toDestination();
+                    console.log("Tone.js Audio initialized.");
+                }
+            } catch (e) {
+                console.warn("Tone.js initialization failed, audio alerts will be disabled.", e);
+                alertSynth = null;
+            }
+        }
+
+        /**
+         * Plays a short bell sound to alert of a new incoming patient.
+         */
+        function playNewPatientAlert() {
+            if (alertSynth) {
+                // Play a high, short note (like a small bell/chime)
+                alertSynth.triggerAttackRelease("G5", "8n"); 
+            }
+        }
+
         // Utility to format date to YYYY-MM-DD
         const getTodayDateString = () => {
             const today = new Date();
@@ -382,14 +412,13 @@
          */
         const renderPatientCard = (patient, view) => {
             const content = dictionary[currentState.language];
-            const isCritical = patient.priority === 'high';
             const priorityClass = {
                 high: 'bg-red-100 text-red-800 border-red-500',
                 medium: 'bg-yellow-100 text-yellow-800 border-yellow-500',
                 low: 'bg-green-100 text-green-800 border-green-500'
             }[patient.priority] || 'bg-gray-100 text-gray-800 border-gray-500';
 
-            const blinkingClass = isCritical && view === 'receiving' ? 'blinking-red' : '';
+            // NOTE: Removed blinkingClass logic here as per user request.
             
             const timeKey = view === 'station' ? 'timeAtStation' : 'timeAtEntry';
             const timeSince = patient[timeKey] ? formatTimeSince(patient[timeKey]) : '--';
@@ -495,7 +524,7 @@
             // --- End Vitals Display and Updater ---
 
             return `
-                <div id="patient-card-${patient.id}" class="bg-white p-4 sm:p-6 rounded-xl shadow-md border-l-4 ${priorityClass} ${blinkingClass}">
+                <div id="patient-card-${patient.id}" class="bg-white p-4 sm:p-6 rounded-xl shadow-md border-l-4 ${priorityClass}">
                     <div class="flex justify-between items-start mb-3">
                         <h3 class="text-xl font-bold text-gray-900">${patient.name} (${new Date().getFullYear() - new Date(patient.dob).getFullYear()})</h3>
                         <span class="text-xs font-semibold px-3 py-1 rounded-full ${priorityClass}">${content.patientEntry.priorities[patient.priority]}</span>
@@ -569,7 +598,7 @@
                 let activeClasses = "bg-blue-600 text-white shadow-lg";
                 let inactiveClasses = "text-gray-700 hover:bg-gray-100";
                 
-                // Add blinking class if conditions met
+                // Add blinking class if conditions met (Only the tab button blinks now)
                 if (tab === 'receiving' && shouldBlink) {
                     baseClasses += ' blinking-red';
                     inactiveClasses = "text-red-800 hover:bg-red-100";
@@ -683,6 +712,11 @@
         }
 
         /**
+         * Tracks the previous count of receiving patients to trigger the audio alert.
+         */
+        let previousReceivingCount = 0;
+
+        /**
          * Real-time listener for patient data.
          * Updates the global patient lists and triggers a UI render.
          */
@@ -731,9 +765,20 @@
          */
         function updatePatientLists(patients) {
             allPatients = patients;
-            receivingPatients = patients
+            const newReceivingPatients = patients
                 .filter(p => p.status === 'receiving')
                 .sort((a, b) => (toJsDate(a.timeAtEntry) - toJsDate(b.timeAtEntry))); // Oldest first
+            
+            // --- NEW: Audio Alert Logic ---
+            // If the number of receiving patients has increased AND we are not on the receiving tab, play the alert.
+            if (newReceivingPatients.length > previousReceivingCount && currentState.activeTab !== 'receiving') {
+                playNewPatientAlert();
+            }
+            previousReceivingCount = newReceivingPatients.length;
+            // --- End Audio Alert Logic ---
+
+            receivingPatients = newReceivingPatients;
+
             stationPatients = patients
                 .filter(p => p.status === 'station')
                 .sort((a, b) => (toJsDate(a.timeAtStation) - toJsDate(b.timeAtStation))); // Oldest first
@@ -1032,6 +1077,7 @@
         // --- Event Listeners and Initialization ---
 
         window.onload = () => {
+            initializeAudio(); // Initialize audio before Firebase
             initializeFirebase();
             render(); // Initial render before data loads
 
@@ -1067,7 +1113,7 @@
             outline: none;
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.5); /* Blue ring */
         }
-        /* CSS for the blinking effect */
+        /* CSS for the blinking effect (ONLY APPLIES TO THE TAB BUTTON) */
         .blinking-red {
             animation: blink-animation 1s steps(5, start) infinite;
             background-color: #fee2e2 !important; /* Red-100 */
@@ -1297,4 +1343,4 @@
     <!-- End Discharge Confirmation Modal -->
 
 </body>
-</h
+</html>
