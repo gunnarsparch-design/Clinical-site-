@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -52,6 +52,7 @@
         let app, db, auth, userId = null;
         let isAuthReady = false; // Flag to ensure DB operations only run after auth/mock is ready
         let useMockDb = false; // Flag for mock data mode
+        let dbStatus = 'CONNECTING...'; // New status indicator
         
         // All patients loaded from DB/Mock DB
         let allPatients = []; 
@@ -80,6 +81,11 @@
                 title: "SAMS | Emergency Patient Flow",
                 slogan: "Real-time Clinical Intake & Triage",
                 userIdText: "User ID:",
+                dbStatus: {
+                    connected: "Real-time (Firebase)",
+                    mock: "Local Mock DB (No Sync)",
+                    connecting: "Connecting...",
+                },
                 nav: {
                     home: "Home",
                     patientEntry: "Patient Entry",
@@ -197,6 +203,11 @@
                 title: "SAMS | Notfall Patientenfluss",
                 slogan: "Echtzeit Klinische Aufnahme & Triage",
                 userIdText: "Benutzer-ID:",
+                dbStatus: {
+                    connected: "Echtzeit (Firebase)",
+                    mock: "Lokaler Testmodus (Keine Synchronisierung)",
+                    connecting: "Verbinden...",
+                },
                 nav: {
                     home: "Startseite",
                     patientEntry: "Patienteneingabe",
@@ -691,11 +702,23 @@
             if(userIdDisplay) {
                 userIdDisplay.textContent = userId || (useMockDb ? 'MOCK-USER' : 'Loading...');
             }
+            
+            // 2. Update DB Status Indicator
+            const statusEl = getEl('db-status-display');
+            const statusContent = {
+                'FIREBASE CONNECTED': { text: content.dbStatus.connected, class: 'bg-green-100 text-green-700' },
+                'LOCAL MOCK DB (NO SYNC)': { text: content.dbStatus.mock, class: 'bg-red-100 text-red-700' },
+                'CONNECTING...': { text: content.dbStatus.connecting, class: 'bg-yellow-100 text-yellow-700' }
+            }[dbStatus] || { text: 'Unbekannt', class: 'bg-gray-100 text-gray-700' };
 
-            // 2. Determine if Receiving Tab needs to blink (unreceived patients exist)
+            statusEl.textContent = statusContent.text;
+            statusEl.className = `text-xs font-semibold p-2 rounded-lg ${statusContent.class}`;
+
+
+            // 3. Determine if Receiving Tab needs to blink (unreceived patients exist)
             const shouldBlink = activeTab !== 'receiving' && receivingPatients.length > 0;
 
-            // 3. Render Navigation Tabs
+            // 4. Render Navigation Tabs
             const tabNav = getEl('tab-nav');
             tabNav.innerHTML = tabs.map(tab => {
                 const isActive = tab === activeTab;
@@ -716,7 +739,7 @@
                 `;
             }).join('');
 
-            // 4. Update Content Sections and Visibility
+            // 5. Update Content Sections and Visibility
             tabs.forEach(tab => {
                 const tabEl = getEl(`tab-${tab}`);
                 if (tabEl) {
@@ -841,8 +864,13 @@
                 // Mock data starts empty as requested, to allow a "blank slate" start.
                 // If this is the first setup, mockPatients will be empty.
                 updatePatientLists(mockPatients);
+                dbStatus = 'LOCAL MOCK DB (NO SYNC)'; // Update status
+                render();
                 return;
             }
+            
+            dbStatus = 'FIREBASE CONNECTED'; // Assume connection will work
+            render();
 
             // Firestore Setup (Public data for collaboration)
             const publicPatientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'patients');
@@ -1130,11 +1158,14 @@
          * Authentication and Initialization
          */
         async function initializeFirebase() {
+            dbStatus = 'CONNECTING...';
+
             if (!firebaseConfig) {
                 console.warn("Firebase config not available. Running in Mock Database mode.");
                 useMockDb = true;
                 isAuthReady = true; // Ready for mock operations
                 userId = 'MOCK-USER';
+                dbStatus = 'LOCAL MOCK DB (NO SYNC)'; // Update status
                 setupPatientListener();
                 return;
             }
@@ -1155,6 +1186,7 @@
                     if (user) {
                         userId = user.uid;
                         isAuthReady = true;
+                        dbStatus = 'FIREBASE CONNECTED'; // Success status
                         console.log("Firebase Auth successful. User ID:", userId);
                         setupPatientListener();
                     } else {
@@ -1162,6 +1194,7 @@
                         console.error("Firebase Auth state failed or logged out.");
                         isAuthReady = false;
                         userId = null;
+                        dbStatus = 'LOCAL MOCK DB (NO SYNC)'; // Fallback status
                         render();
                     }
                 });
@@ -1173,6 +1206,7 @@
                     useMockDb = true;
                     isAuthReady = true;
                     userId = 'MOCK-USER';
+                    dbStatus = 'LOCAL MOCK DB (NO SYNC)'; // Fallback status
                     console.log("Hard fallback to Mock Database due to Firebase error.");
                     setupPatientListener();
                 }
@@ -1211,6 +1245,12 @@
             </div>
             
             <div class="flex items-center space-x-4 mt-2 sm:mt-0">
+                
+                <!-- DB Status Indicator (NEW) -->
+                <div class="text-xs font-semibold p-2 rounded-lg" id="db-status-display">
+                    Verbinden...
+                </div>
+
                 <!-- User ID Display -->
                 <div class="text-xs text-gray-500 hidden md:flex items-center">
                     <span id="user-id-text" class="font-semibold mr-1">User ID:</span>
