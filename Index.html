@@ -265,24 +265,11 @@
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // --- Core Application State & Logic ---
+        // Firebase Instances
+        let app, db, auth, userId = null;
+        let isAuthReady = false;
+        let useMockDb = false;
         
-        const tabs = ['home', 'patientEntry', 'receiving', 'station', 'archive', 'contact'];
-        
-        // Load initial state from localStorage or use defaults
-        const savedLang = localStorage.getItem('samsAppLanguage');
-        const savedTab = localStorage.getItem('samsAppActiveTab');
-
-        let currentState = {
-            // Load language, default to 'en' if not found or invalid
-            language: (savedLang && dictionary[savedLang]) ? savedLang : 'en', 
-            // Load active tab, default to 'home' if not found or invalid
-            activeTab: (savedTab && tabs.includes(savedTab)) ? savedTab : 'home'
-        };
-        
-        // State for the modal
-        let modalPatientId = null;
-
         // All patients loaded from DB/Mock DB
         let allPatients = []; 
         // Derived lists for UI
@@ -298,23 +285,9 @@
             { id: 'NR201', name: 'Nurse Lisa Kim', role: 'Nurse' },
             { id: 'NR202', name: 'Nurse David Chen', role: 'Nurse' },
         ];
-
-        // Firebase Instances
-        let app, db, auth, userId = null;
-        let isAuthReady = false;
-        let useMockDb = false;
-
         
-        // Utility to format date to YYYY-MM-DD
-        const getTodayDateString = () => {
-            const today = new Date();
-            const yyyy = today.getFullYear();
-            const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months start at 0!
-            const dd = String(today.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
-        };
-
         // Dictionary for multilingual content
+        // MOVED THIS BLOCK UP TO RESOLVE "Cannot access 'dictionary' before initialization" ERROR
         const dictionary = {
             en: {
                 title: "SAMS | Emergency Patient Flow",
@@ -506,6 +479,33 @@
                     rights: "Alle Rechte vorbehalten."
                 }
             }
+        };
+
+        // --- Core Application State & Logic ---
+        
+        const tabs = ['home', 'patientEntry', 'receiving', 'station', 'archive', 'contact'];
+        
+        // Load initial state from localStorage or use defaults
+        const savedLang = localStorage.getItem('samsAppLanguage');
+        const savedTab = localStorage.getItem('samsAppActiveTab');
+
+        let currentState = {
+            // Load language, default to 'en' if not found or invalid
+            language: (savedLang && dictionary[savedLang]) ? savedLang : 'en', 
+            // Load active tab, default to 'home' if not found or invalid
+            activeTab: (savedTab && tabs.includes(savedTab)) ? savedTab : 'home'
+        };
+        
+        // State for the modal
+        let modalPatientId = null;
+
+        // Utility to format date to YYYY-MM-DD
+        const getTodayDateString = () => {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months start at 0!
+            const dd = String(today.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
         };
 
         // Utility to safely retrieve DOM elements
