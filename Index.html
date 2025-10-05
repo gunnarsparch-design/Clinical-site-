@@ -22,10 +22,10 @@
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // Firebase Instances
+        // Firebase Instances (Initialized inside initializeFirebase)
         let app, db, auth, userId = null;
-        let isAuthReady = false;
-        let useMockDb = false;
+        let isAuthReady = false; // Flag to ensure DB operations only run after auth/mock is ready
+        let useMockDb = false; // Flag for mock data mode
         
         // All patients loaded from DB/Mock DB
         let allPatients = []; 
@@ -418,7 +418,7 @@
                 low: 'bg-green-100 text-green-800 border-green-500'
             }[patient.priority] || 'bg-gray-100 text-gray-800 border-gray-500';
 
-            // NOTE: Removed blinkingClass logic here as per user request.
+            // Patient card blinking logic removed as requested.
             
             const timeKey = view === 'station' ? 'timeAtStation' : 'timeAtEntry';
             const timeSince = patient[timeKey] ? formatTimeSince(patient[timeKey]) : '--';
@@ -650,7 +650,7 @@
             }
             // Set initial date for DOB to something sensible (e.g., 20 years ago)
             const dobInput = getEl('p-dob');
-            if (dobInput.value === '') {
+            if (dobInput && dobInput.value === '') {
                 const twentyYearsAgo = new Date();
                 twentyYearsAgo.setFullYear(twentyYearsAgo.getFullYear() - 20);
                 const yyyy = twentyYearsAgo.getFullYear();
@@ -740,6 +740,11 @@
             }
 
             // Firestore Setup (Public data for collaboration)
+            if (!db) {
+                console.error("Firestore DB instance is null. Cannot set up listener.");
+                return;
+            }
+            
             const publicPatientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'patients');
             
             // Set up real-time listener
@@ -755,6 +760,7 @@
                 if (!useMockDb) {
                     console.log("Falling back to mock database.");
                     useMockDb = true;
+                    // Re-run listener setup which will now hit the mock DB path
                     setupPatientListener(); 
                 }
             });
@@ -797,6 +803,14 @@
             const form = getEl('patient-entry-form');
             const messageBox = getEl('patient-message-box');
             messageBox.classList.add('hidden');
+            
+            if (!isAuthReady) {
+                console.error("App not ready for DB operations.");
+                messageBox.textContent = dictionary[currentState.language].patientEntry.error;
+                messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-red-100 text-red-700 block';
+                return;
+            }
+
 
             const name = getEl('p-name').value.trim();
             const dob = getEl('p-dob').value;
@@ -856,6 +870,8 @@
                 console.warn("Please select a staff member AND a station location before moving to station.");
                 return;
             }
+            if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
+
 
             const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
             const updateData = {
@@ -890,6 +906,8 @@
                 console.warn("Please select a staff member for assignment update.");
                 return;
             }
+            if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
+
 
             const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
             const updateData = {
@@ -920,6 +938,7 @@
                 console.warn("Vitals fields cannot be empty.");
                 return;
             }
+            if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
 
             const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
             const updateData = {};
@@ -952,6 +971,9 @@
          */
         async function handleDischarge(event) {
             event.preventDefault();
+            
+            if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
+
             const staffName = getEl('discharge-staff-name').value.trim();
             const dischargeDate = getEl('discharge-date').value;
 
@@ -993,23 +1015,28 @@
         async function initializeFirebase() {
             if (firebaseConfig) {
                 try {
+                    // Initialize app and services
                     app = initializeApp(firebaseConfig);
                     db = getFirestore(app);
                     auth = getAuth(app);
 
                     // Sign in with custom token or anonymously
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                    } else {
-                        await signInAnonymously(auth);
+                    const user = auth.currentUser;
+                    if (!user) {
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
                     }
 
+                    // Set up Auth State Change Listener
                     onAuthStateChanged(auth, (user) => {
                         if (user) {
                             userId = user.uid;
                             isAuthReady = true;
                             console.log(`Authenticated. User ID: ${userId}`);
-                            setupPatientListener();
+                            setupPatientListener(); // Start data listener ONLY after auth is confirmed
                             startUpdateTimer();
                         } else {
                             // Should not happen if token is provided, but handle anonymous fallback
@@ -1019,23 +1046,28 @@
                             setupPatientListener();
                             startUpdateTimer();
                         }
+                        render(); // Initial render to show user ID
                     });
 
                 } catch (e) {
                     console.error("Firebase initialization failed. Falling back to Mock DB.", e);
+                    // Critical failure, use mock DB
                     useMockDb = true;
                     isAuthReady = true;
                     userId = 'MOCK-USER';
                     setupPatientListener();
                     startUpdateTimer();
+                    render(); // Initial render for mock DB
                 }
             } else {
                 console.error("Firebase config not available. Using Mock DB.");
+                // Critical failure, use mock DB
                 useMockDb = true;
                 isAuthReady = true;
                 userId = 'MOCK-USER';
                 setupPatientListener();
                 startUpdateTimer();
+                render(); // Initial render for mock DB
             }
         }
 
