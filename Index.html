@@ -721,8 +721,9 @@
          * Updates the global patient lists and triggers a UI render.
          */
         function setupPatientListener() {
-            if (!isAuthReady) {
-                console.warn("Auth not ready. Skipping Firestore listener setup.");
+            // CRITICAL CHECK: Ensure DB object exists before using it
+            if (!isAuthReady || (!db && !useMockDb)) {
+                console.warn("Auth not ready or DB instance missing. Skipping Firestore listener setup.");
                 return;
             }
 
@@ -740,11 +741,6 @@
             }
 
             // Firestore Setup (Public data for collaboration)
-            if (!db) {
-                console.error("Firestore DB instance is null. Cannot set up listener.");
-                return;
-            }
-            
             const publicPatientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'patients');
             
             // Set up real-time listener
@@ -804,13 +800,13 @@
             const messageBox = getEl('patient-message-box');
             messageBox.classList.add('hidden');
             
+            // CRITICAL CHECK: Must be ready for DB operations
             if (!isAuthReady) {
-                console.error("App not ready for DB operations.");
+                console.error("App not ready for DB operations. isAuthReady: false");
                 messageBox.textContent = dictionary[currentState.language].patientEntry.error;
                 messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-red-100 text-red-700 block';
                 return;
             }
-
 
             const name = getEl('p-name').value.trim();
             const dob = getEl('p-dob').value;
@@ -847,6 +843,7 @@
                     mockPatients.push(newPatient);
                     updatePatientLists(mockPatients);
                 } else {
+                    if (!db) throw new Error("Firestore instance (db) is null."); // ADDED DEFENSIVE CHECK
                     const publicPatientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'patients');
                     await addDoc(publicPatientsRef, newPatient);
                 }
@@ -871,9 +868,9 @@
                 return;
             }
             if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
+            if (!useMockDb && !db) { console.error("Firestore instance (db) is null."); return; } // ADDED DEFENSIVE CHECK
 
 
-            const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
             const updateData = {
                 status: 'station',
                 assignedStaff: staffName,
@@ -889,6 +886,7 @@
                         updatePatientLists(mockPatients);
                     }
                 } else {
+                    const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
                     await updateDoc(patientRef, updateData);
                 }
                 console.log(`Patient ${patientId} assigned to ${staffName} at ${stationLocation} and moved to Station.`);
@@ -907,9 +905,9 @@
                 return;
             }
             if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
+            if (!useMockDb && !db) { console.error("Firestore instance (db) is null."); return; } // ADDED DEFENSIVE CHECK
 
 
-            const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
             const updateData = {
                 assignedStaff: staffName,
             };
@@ -922,6 +920,7 @@
                         updatePatientLists(mockPatients);
                     }
                 } else {
+                    const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
                     await updateDoc(patientRef, updateData);
                 }
                 console.log(`Patient ${patientId} staff updated to ${staffName}.`);
@@ -939,8 +938,9 @@
                 return;
             }
             if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
+            if (!useMockDb && !db) { console.error("Firestore instance (db) is null."); return; } // ADDED DEFENSIVE CHECK
 
-            const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
+
             const updateData = {};
 
             if (newBpm && newBpm.trim() !== '') updateData.bpm = newBpm.trim();
@@ -957,6 +957,7 @@
                         updatePatientLists(mockPatients);
                     }
                 } else {
+                    const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
                     await updateDoc(patientRef, updateData);
                 }
                 console.log(`Patient ${patientId} vitals updated.`);
@@ -972,8 +973,9 @@
         async function handleDischarge(event) {
             event.preventDefault();
             
+            // CRITICAL CHECK: Must be ready for DB operations
             if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
-
+            
             const staffName = getEl('discharge-staff-name').value.trim();
             const dischargeDate = getEl('discharge-date').value;
 
@@ -982,7 +984,6 @@
                 return;
             }
 
-            const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', modalPatientId);
             const updateData = {
                 status: 'archive',
                 dischargedBy: staffName,
@@ -998,6 +999,8 @@
                         updatePatientLists(mockPatients);
                     }
                 } else {
+                    if (!db) throw new Error("Firestore instance (db) is null."); // ADDED DEFENSIVE CHECK
+                    const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', modalPatientId);
                     await updateDoc(patientRef, updateData);
                 }
                 console.log(`Patient ${modalPatientId} archived.`);
@@ -1017,6 +1020,7 @@
                 try {
                     // Initialize app and services
                     app = initializeApp(firebaseConfig);
+                    // CRITICAL: Assign db here
                     db = getFirestore(app);
                     auth = getAuth(app);
 
@@ -1034,18 +1038,15 @@
                     onAuthStateChanged(auth, (user) => {
                         if (user) {
                             userId = user.uid;
-                            isAuthReady = true;
-                            console.log(`Authenticated. User ID: ${userId}`);
-                            setupPatientListener(); // Start data listener ONLY after auth is confirmed
-                            startUpdateTimer();
                         } else {
-                            // Should not happen if token is provided, but handle anonymous fallback
                             userId = crypto.randomUUID();
-                            isAuthReady = true;
-                            console.log("Signed in anonymously. Using random UUID.");
-                            setupPatientListener();
-                            startUpdateTimer();
                         }
+                        
+                        // CRITICAL: Set isAuthReady only after the user ID is determined
+                        isAuthReady = true;
+                        console.log(`Auth Ready. User ID: ${userId}`);
+                        setupPatientListener(); // Start data listener ONLY after auth is confirmed
+                        startUpdateTimer();
                         render(); // Initial render to show user ID
                     });
 
