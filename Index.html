@@ -8,11 +8,37 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
-    <!-- Firebase Imports -->
+
+    <style>
+        /* Custom CSS for a clean look and responsive layout */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .blinking-red {
+            animation: blinker 1s cubic-bezier(.5, 0, 1, 1) infinite alternate;
+        }
+        @keyframes blinker {
+            from { opacity: 1; box-shadow: 0 0 10px rgba(255, 0, 0, 0.5); }
+            to { opacity: 0.8; box-shadow: 0 0 15px rgba(255, 0, 0, 0.8); }
+        }
+        /* Style for the fixed header/nav */
+        .header-fixed {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #e0e0e0; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, addDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel, deleteDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Set Firebase Log Level to Debug
         setLogLevel('Debug');
@@ -38,6 +64,7 @@
 
         // Tone.js Synth for the Bell Alert
         let alertSynth = null; 
+        let isAudioEnabled = false; // Flag to track if audio context is running
         
         // Mock Staff for assignment feature
         const mockStaff = [
@@ -65,6 +92,11 @@
                     heading: "Welcome to SAMS Intake System",
                     p1: "This interface is designed for rapid patient entry and triage management in the Emergency Room. Please use the Patient Entry tab to log incoming patients immediately.",
                     p2: "The Receiving tab shows all pending patients awaiting clinical assignment. The Station tab tracks active patients, and the Archive tab holds discharged records. This list is updated in real-time.",
+                    audioStatus: "Audio Status",
+                    audioDesc: "The browser requires a user interaction to enable sound alerts.",
+                    enableAudio: "Enable Audio",
+                    audioEnabled: "Audio Enabled (Bell is active)",
+                    audioBlocked: "Audio Blocked (Click to enable)",
                 },
                 patientEntry: {
                     heading: "ER Patient Quick Entry",
@@ -92,7 +124,6 @@
                     submitter: "Submitted by:",
                     vitals: "Vitals:", 
                     paramedic: "Paramedic:", 
-                    // NEW STATION CHOICES
                     stationLabel: "Assign Station Location",
                     stationLocations: { 
                         icu: "ICU (Intensive Care Unit)", 
@@ -110,12 +141,12 @@
                     time: "Time at Station:", 
                     submitter: "Triage/Assignment by:",
                     assigned: "Assigned Staff:",
-                    currentStation: "Current Station:", // NEW
+                    currentStation: "Current Station:", 
                     assignBtn: "Change Staff",
                     unassigned: "Unassigned",
                     vitals: "Vitals:", 
                     paramedic: "Paramedic:", 
-                    updateVitalsBtn: "Update Vitals", // NEW
+                    updateVitalsBtn: "Update Vitals", 
                 },
                 archive: {
                     heading: "Archived/Discharged Patients",
@@ -127,6 +158,7 @@
                     dischargedBy: "Discharged by:", 
                     dischargeDate: "Discharge Date:", 
                     submitter: "Triage/Assignment by:", 
+                    clearAllBtn: "Clear All Archived Patients",
                     cleared: "Archive cleared successfully.",
                     vitals: "Vitals:", 
                     paramedic: "Paramedic:", 
@@ -149,6 +181,14 @@
                     confirmBtn: "Confirm & Archive",
                     dischargeFailed: "Discharge failed. Please check the form and try again."
                 },
+                clearModal: {
+                    title: "Confirmation: Clear All Patient Data",
+                    message: "Are you sure you want to permanently delete ALL patient records (Receiving, Station, and Archive)? This action cannot be undone.",
+                    cancelBtn: "Cancel",
+                    confirmBtn: "Delete All Records",
+                    success: "All patient records have been cleared.",
+                    error: "Failed to clear all records. Check console.",
+                },
                 footer: {
                     rights: "All rights reserved."
                 }
@@ -169,6 +209,11 @@
                     heading: "Willkommen beim SAMS Aufnahmesystem",
                     p1: "Diese Oberfläche dient der schnellen Patientenaufnahme und dem Triage-Management in der Notaufnahme. Bitte verwenden Sie den Reiter Patienteneingabe, um eintreffende Patienten sofort zu protokollieren.",
                     p2: "Der Empfangs-Reiter zeigt alle ausstehenden Patienten an, die auf eine klinische Zuweisung warten. Der Stations-Reiter verfolgt aktive Patienten, und das Archiv enthält entlassene Aufzeichnungen. Diese Listen werden in Echtzeit aktualisiert.",
+                    audioStatus: "Audio Status",
+                    audioDesc: "Der Browser erfordert eine Benutzerinteraktion, um akustische Warnungen zu aktivieren.",
+                    enableAudio: "Audio aktivieren",
+                    audioEnabled: "Audio Aktiviert (Glocke ist aktiv)",
+                    audioBlocked: "Audio Blockiert (Zum Aktivieren klicken)",
                 },
                 patientEntry: {
                     heading: "Notfall Patientenschnelleingabe",
@@ -196,7 +241,6 @@
                     submitter: "Eingereicht von:",
                     vitals: "Vitalwerte:", 
                     paramedic: "Notarzt/Team:", 
-                    // NEW STATION CHOICES
                     stationLabel: "Stationsort Zuweisen",
                     stationLocations: { 
                         icu: "ICU (Intensivstation)", 
@@ -214,12 +258,12 @@
                     time: "Zeit auf Station:",
                     submitter: "Triage/Zuweisung durch:",
                     assigned: "Zugewiesener Mitarbeiter:",
-                    currentStation: "Aktuelle Station:", // NEW
+                    currentStation: "Aktuelle Station:", 
                     assignBtn: "Mitarbeiter Wechseln",
                     unassigned: "Nicht Zugewiesen",
                     vitals: "Vitalwerte:", 
                     paramedic: "Notarzt/Team:", 
-                    updateVitalsBtn: "Vitalwerte Aktualisieren", // NEW
+                    updateVitalsBtn: "Vitalwerte Aktualisieren", 
                 },
                 archive: {
                     heading: "Archivierte/Entlassene Patienten",
@@ -231,6 +275,7 @@
                     dischargedBy: "Entlassen durch:",
                     dischargeDate: "Entlassungsdatum:",
                     submitter: "Triage/Zuweisung durch:",
+                    clearAllBtn: "Alle Patienten Löschen",
                     cleared: "Archiv erfolgreich gelöscht.",
                     vitals: "Vitalwerte:", 
                     paramedic: "Notarzt/Team:", 
@@ -253,6 +298,14 @@
                     confirmBtn: "Bestätigen & Archivieren",
                     dischargeFailed: "Entlassung fehlgeschlagen. Bitte überprüfen Sie das Formular und versuchen Sie es erneut."
                 },
+                clearModal: {
+                    title: "Bestätigung: Alle Patientendaten Löschen",
+                    message: "Sind Sie sicher, dass Sie ALLE Patientenakten (Empfang, Station und Archiv) dauerhaft löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+                    cancelBtn: "Abbrechen",
+                    confirmBtn: "Alle Datensätze Löschen",
+                    success: "Alle Patientenakten wurden gelöscht.",
+                    error: "Fehler beim Löschen aller Datensätze. Konsole prüfen.",
+                },
                 footer: {
                     rights: "Alle Rechte vorbehalten."
                 }
@@ -268,38 +321,85 @@
         const savedTab = localStorage.getItem('samsAppActiveTab');
 
         let currentState = {
-            // Load language, default to 'en' if not found or invalid
-            language: (savedLang && dictionary[savedLang]) ? savedLang : 'en', 
-            // Load active tab, default to 'home' if not found or invalid
+            language: (savedLang && dictionary[savedLang]) ? savedLang : 'de', 
             activeTab: (savedTab && tabs.includes(savedTab)) ? savedTab : 'home'
         };
         
-        // State for the modal
+        // State for the modals
         let modalPatientId = null;
 
         /**
          * Initializes the Tone.js Synth for the bell alert.
          */
         function initializeAudio() {
+            if (isAudioEnabled) return; // Already initialized
+
             try {
-                if (Tone) {
+                // Tone.start() must be called from a user-initiated event.
+                Tone.start().then(() => {
                     // Use a simple FM Synth to emulate a metallic bell sound
                     alertSynth = new Tone.FMSynth().toDestination();
-                    console.log("Tone.js Audio initialized.");
-                }
+                    isAudioEnabled = true;
+                    console.log("Tone.js Audio context started.");
+                    renderAudioStatus(); // Update UI
+                }).catch(e => {
+                    console.warn("Tone.start() failed, keeping audio blocked.", e);
+                    renderAudioStatus(); // Update UI to blocked state
+                });
             } catch (e) {
                 console.warn("Tone.js initialization failed, audio alerts will be disabled.", e);
                 alertSynth = null;
+                isAudioEnabled = false;
+                renderAudioStatus(); // Update UI
             }
+        }
+        
+        /**
+         * Public function to enable audio, called by a user click.
+         */
+        window.enableAudio = () => {
+             initializeAudio();
+        };
+        
+        /**
+         * Updates the audio status indicator in the UI.
+         */
+        function renderAudioStatus() {
+            const statusEl = getEl('audio-status');
+            const buttonEl = getEl('enable-audio-btn');
+            const content = dictionary[currentState.language].home;
+            
+            if (!statusEl || !buttonEl) return;
+            
+            if (isAudioEnabled) {
+                statusEl.innerHTML = `<span data-lucide="bell" class="w-4 h-4 mr-2 text-green-500"></span>${content.audioEnabled}`;
+                buttonEl.classList.add('hidden');
+                statusEl.classList.remove('text-red-600');
+                statusEl.classList.add('text-green-600');
+            } else {
+                statusEl.innerHTML = `<span data-lucide="bell-off" class="w-4 h-4 mr-2 text-red-500"></span>${content.audioBlocked}`;
+                buttonEl.textContent = content.enableAudio;
+                buttonEl.classList.remove('hidden');
+                statusEl.classList.remove('text-green-600');
+                statusEl.classList.add('text-red-600');
+            }
+            lucide.createIcons();
         }
 
         /**
          * Plays a short bell sound to alert of a new incoming patient.
          */
         function playNewPatientAlert() {
-            if (alertSynth) {
-                // Play a high, short note (like a small bell/chime)
-                alertSynth.triggerAttackRelease("G5", "8n"); 
+            if (alertSynth && isAudioEnabled) {
+                try {
+                    // Play a high, short note (like a small bell/chime)
+                    alertSynth.triggerAttackRelease("G5", "8n"); 
+                    console.log("New patient alert sound played.");
+                } catch (e) {
+                    console.warn("Error playing audio alert:", e);
+                }
+            } else {
+                console.log("Audio alert blocked or not initialized.");
             }
         }
 
@@ -391,18 +491,29 @@
                 modal.classList.add('opacity-100');
             }
         };
+        
+        /**
+         * Opens the Clear All Data confirmation modal.
+         */
+        window.openClearModal = () => {
+            const modal = getEl('clear-archive-modal');
+            if (modal) {
+                modal.classList.remove('hidden', 'opacity-0');
+                modal.classList.add('opacity-100');
+            }
+        };
 
         /**
-         * Closes the discharge confirmation modal.
+         * Closes any confirmation modal.
          */
-        window.closeModal = () => {
-            const modal = getEl('discharge-modal');
+        window.closeModal = (modalId) => {
+            const modal = getEl(modalId);
             if (modal) {
                 modal.classList.add('opacity-0');
                 modal.classList.remove('opacity-100');
                 setTimeout(() => {
                     modal.classList.add('hidden');
-                    modalPatientId = null;
+                    if (modalId === 'discharge-modal') modalPatientId = null;
                 }, 300); // Wait for transition
             }
         };
@@ -418,8 +529,6 @@
                 low: 'bg-green-100 text-green-800 border-green-500'
             }[patient.priority] || 'bg-gray-100 text-gray-800 border-gray-500';
 
-            // Patient card blinking logic removed as requested.
-            
             const timeKey = view === 'station' ? 'timeAtStation' : 'timeAtEntry';
             const timeSince = patient[timeKey] ? formatTimeSince(patient[timeKey]) : '--';
             const timeLabel = view === 'archive' ? content.archive.time : (view === 'station' ? content.station.time : content.receiving.time);
@@ -430,10 +539,8 @@
             let vitalsDisplayAndUpdater = '';
 
             if (view === 'receiving') {
-                // Staff assignment and Station selection dropdowns
                 const staffOptions = mockStaff.map(staff => `<option value="${staff.name}" ${patient.assignedStaff === staff.name ? 'selected' : ''}>${staff.role}: ${staff.name}</option>`).join('');
                 
-                // NEW: Station Location Dropdown
                 const stationOptions = Object.entries(content.receiving.stationLocations).map(([key, value]) => 
                     `<option value="${key}">${value}</option>`
                 ).join('');
@@ -451,14 +558,13 @@
                         </select>
 
                         <button onclick="window.moveToStation('${patient.id}', document.getElementById('staff-select-${patient.id}').value, document.getElementById('station-select-${patient.id}').value)" 
-                                class="w-full bg-red-600 text-white font-medium py-2 px-3 rounded-lg hover:bg-red-700 transition duration-200 text-sm flex items-center justify-center">
+                                class="w-full bg-red-600 text-white font-medium py-2 px-3 rounded-lg hover:bg-red-700 transition duration-200 text-sm flex items-center justify-center shadow-md">
                             <span data-lucide="chevrons-right" class="w-4 h-4 mr-2"></span>
                             ${content.receiving.receiveBtn}
                         </button>
                     </div>
                 `;
             } else if (view === 'station') {
-                // Assigned staff info, Current Station, and Discharge button for station
                 const staffOptions = mockStaff.map(staff => `<option value="${staff.name}" ${patient.assignedStaff === staff.name ? 'selected' : ''}>${staff.role}: ${staff.name}</option>`).join('');
                 
                 assignedStaffInfo = `
@@ -477,13 +583,12 @@
                 `;
                 
                 actionButton = `
-                    <button onclick="window.openModal('${patient.id}')" class="w-full bg-blue-600 text-white font-medium py-2 px-3 rounded-lg hover:bg-blue-700 transition duration-200 text-sm flex items-center justify-center">
+                    <button onclick="window.openModal('${patient.id}')" class="w-full bg-blue-600 text-white font-medium py-2 px-3 rounded-lg hover:bg-blue-700 transition duration-200 text-sm flex items-center justify-center shadow-md">
                         <span data-lucide="archive" class="w-4 h-4 mr-2"></span>
                         ${content.station.releaseBtn}
                     </button>
                 `;
             } else if (view === 'archive') {
-                // Discharge details for archive
                 dischargeDetails = `
                     <p class="text-sm">
                         <span class="font-semibold">${content.archive.dischargedBy}</span>
@@ -507,16 +612,16 @@
             if (view === 'station') {
                 vitalsDisplayAndUpdater += `
                     <button id="vitals-btn-${patient.id}" onclick="document.getElementById('vitals-form-${patient.id}').classList.toggle('hidden')" 
-                            class="mt-2 w-full text-xs bg-red-100 text-red-700 font-medium py-1 px-2 rounded-lg hover:bg-red-200 transition duration-200 flex items-center justify-center">
+                            class="mt-2 w-full text-xs bg-red-100 text-red-700 font-medium py-1 px-2 rounded-lg hover:bg-red-200 transition duration-200 flex items-center justify-center shadow-sm">
                         <span data-lucide="activity" class="w-3 h-3 mr-1"></span>
                         ${content.station.updateVitalsBtn}
                     </button>
                     
                     <!-- Inline Vitals Update Form (hidden by default) -->
-                    <form id="vitals-form-${patient.id}" class="hidden space-y-2 mt-3 p-3 bg-gray-50 rounded-lg" onsubmit="event.preventDefault(); window.updatePatientVitals('${patient.id}', document.getElementById('new-bpm-${patient.id}').value, document.getElementById('new-bp-${patient.id}').value)">
-                        <input type="number" id="new-bpm-${patient.id}" placeholder="New BPM" class="w-full p-1 text-xs border border-gray-300 rounded">
-                        <input type="text" id="new-bp-${patient.id}" placeholder="New BP (e.g., 120/80)" class="w-full p-1 text-xs border border-gray-300 rounded">
-                        <button type="submit" class="w-full bg-red-600 text-white text-xs font-medium py-1 rounded hover:bg-red-700">Save Vitals</button>
+                    <form id="vitals-form-${patient.id}" class="hidden space-y-2 mt-3 p-3 bg-gray-50 rounded-lg shadow-inner" onsubmit="event.preventDefault(); window.updatePatientVitals('${patient.id}', document.getElementById('new-bpm-${patient.id}').value, document.getElementById('new-bp-${patient.id}').value)">
+                        <input type="number" id="new-bpm-${patient.id}" placeholder="New BPM" class="w-full p-1 text-xs border border-gray-300 rounded focus:ring-red-500 focus:border-red-500">
+                        <input type="text" id="new-bp-${patient.id}" placeholder="New BP (e.g., 120/80)" class="w-full p-1 text-xs border border-gray-300 rounded focus:ring-red-500 focus:border-red-500">
+                        <button type="submit" class="w-full bg-red-600 text-white text-xs font-medium py-1 rounded hover:bg-red-700 shadow-md">Save Vitals</button>
                     </form>
                 `;
             }
@@ -524,7 +629,7 @@
             // --- End Vitals Display and Updater ---
 
             return `
-                <div id="patient-card-${patient.id}" class="bg-white p-4 sm:p-6 rounded-xl shadow-md border-l-4 ${priorityClass}">
+                <div id="patient-card-${patient.id}" class="bg-white p-4 sm:p-6 rounded-xl shadow-lg border-l-4 ${priorityClass}">
                     <div class="flex justify-between items-start mb-3">
                         <h3 class="text-xl font-bold text-gray-900">${patient.name} (${new Date().getFullYear() - new Date(patient.dob).getFullYear()})</h3>
                         <span class="text-xs font-semibold px-3 py-1 rounded-full ${priorityClass}">${content.patientEntry.priorities[patient.priority]}</span>
@@ -623,6 +728,9 @@
             getEl('home-heading').textContent = content.home.heading;
             getEl('home-paragraph-1').textContent = content.home.p1;
             getEl('home-paragraph-2').textContent = content.home.p2;
+            getEl('audio-status-heading').textContent = content.home.audioStatus;
+            getEl('audio-status-desc').textContent = content.home.audioDesc;
+            renderAudioStatus(); // Renders the audio status box content
 
             // Patient Entry Tab Content (Update labels and options)
             getEl('patientEntry-heading').innerHTML = `<span data-lucide="user-plus" class="w-6 h-6 mr-2 text-green-600"></span>${content.patientEntry.heading}`;
@@ -630,11 +738,9 @@
             getEl('p-dob-label').textContent = content.patientEntry.dobLabel;
             getEl('p-complaint-label').textContent = content.patientEntry.complaintLabel;
             
-            // NEW VITALS LABELS
             getEl('vitals-heading').innerHTML = `<span data-lucide="heart-pulse" class="w-5 h-5 mr-2 text-red-500"></span>${content.patientEntry.vitalsHeading}`;
             getEl('p-bpm-label').textContent = content.patientEntry.bpmLabel;
             getEl('p-bp-label').textContent = content.patientEntry.bpLabel;
-            // NEW PARAMEDIC LABEL
             getEl('p-paramedic-label').textContent = content.patientEntry.paramedicLabel;
 
             getEl('p-priority-label').textContent = content.patientEntry.priorityLabel;
@@ -642,13 +748,11 @@
 
             const prioritySelect = getEl('p-priority');
             if (prioritySelect) {
-                // Keep the current selection if one exists, otherwise rebuild
                 const currentPriority = prioritySelect.value;
                 prioritySelect.innerHTML = Object.entries(content.patientEntry.priorities).map(([key, value]) => 
                     `<option value="${key}" ${key === currentPriority ? 'selected' : ''}>${value}</option>`
                 ).join('');
             }
-            // Set initial date for DOB to something sensible (e.g., 20 years ago)
             const dobInput = getEl('p-dob');
             if (dobInput && dobInput.value === '') {
                 const twentyYearsAgo = new Date();
@@ -679,12 +783,20 @@
 
             // Archive Tab Content
             getEl('archive-heading').innerHTML = `<span data-lucide="archive" class="w-6 h-6 mr-2 text-gray-600"></span>${content.archive.heading} (${archivedPatients.length})`;
+            getEl('clear-archive-btn').textContent = content.archive.clearAllBtn;
             const archiveListContainer = getEl('archive-list-container');
             if (archivedPatients.length === 0) {
                 archiveListContainer.innerHTML = `<p class="text-gray-500 italic text-center py-6">${content.archive.empty}</p>`;
             } else {
                 archiveListContainer.innerHTML = archivedPatients.map(p => renderPatientCard(p, 'archive')).join('');
             }
+            
+            // Clear Modal Content
+            getEl('clear-modal-title').innerHTML = `<span data-lucide="alert-triangle" class="w-6 h-6 mr-2 text-red-500"></span>${content.clearModal.title}`;
+            getEl('clear-modal-message').textContent = content.clearModal.message;
+            getEl('clear-modal-cancel-btn').textContent = content.clearModal.cancelBtn;
+            getEl('clear-modal-confirm-btn').textContent = content.clearModal.confirmBtn;
+
 
             // Contact Tab Content
             getEl('contact-heading').innerHTML = `<span data-lucide="mail" class="w-6 h-6 mr-2 text-gray-600"></span>${content.contact.heading}`;
@@ -696,7 +808,7 @@
             getEl('contact-message-placeholder').placeholder = content.contact.messagePlaceholder;
             getEl('contact-submit-btn').textContent = content.contact.submitBtn;
 
-            // Modal Content
+            // Discharge Modal Content
             getEl('modal-title').innerHTML = `<span data-lucide="shield-check" class="w-6 h-6 mr-2 text-blue-600"></span>${content.modal.title}`;
             getEl('modal-staff-label').textContent = content.modal.staffLabel;
             getEl('modal-date-label').textContent = content.modal.dateLabel;
@@ -718,24 +830,16 @@
 
         /**
          * Real-time listener for patient data.
-         * Updates the global patient lists and triggers a UI render.
          */
         function setupPatientListener() {
-            // CRITICAL CHECK: Ensure DB object exists before using it
             if (!isAuthReady || (!db && !useMockDb)) {
                 console.warn("Auth not ready or DB instance missing. Skipping Firestore listener setup.");
                 return;
             }
 
             if (useMockDb) {
-                // Initial mock data setup
-                if (mockPatients.length === 0) {
-                    mockPatients = [
-                        { id: 'm1', name: 'John Doe', dob: '1985-01-15', complaint: 'Severe chest pain', paramedic: 'EMT Alpha', priority: 'high', bpm: '110', bp: '140/90', status: 'receiving', timeAtEntry: Date.now() - 300000, submittedBy: 'MOCK-USER', timeAtStation: null, assignedStaff: null, stationLocation: null }, // 5 min ago
-                        { id: 'm2', name: 'Jane Smith', dob: '1992-11-20', complaint: 'Broken arm from fall', paramedic: 'Team 3', priority: 'medium', bpm: '85', bp: '120/80', status: 'station', timeAtEntry: Date.now() - 900000, submittedBy: 'MOCK-USER', timeAtStation: Date.now() - 300000, assignedStaff: 'Dr. Emily Carter', stationLocation: 'recovery' }, // 15 min ago, 5 min at station
-                        { id: 'm3', name: 'Sam Wilson', dob: '1950-05-01', complaint: 'Routine checkup/stable', paramedic: 'Self-Check-In', priority: 'low', bpm: '70', bp: '110/70', status: 'archive', timeAtEntry: Date.now() - 3600000, submittedBy: 'MOCK-USER', timeAtStation: Date.now() - 1800000, assignedStaff: 'Dr. Ben Jones', dischargedBy: 'Dr. Ben Jones', dischargeDate: getTodayDateString(), stationLocation: 'discharge' },
-                    ];
-                }
+                // Mock data starts empty as requested, to allow a "blank slate" start.
+                // If this is the first setup, mockPatients will be empty.
                 updatePatientLists(mockPatients);
                 return;
             }
@@ -800,7 +904,6 @@
             const messageBox = getEl('patient-message-box');
             messageBox.classList.add('hidden');
             
-            // CRITICAL CHECK: Must be ready for DB operations
             if (!isAuthReady) {
                 console.error("App not ready for DB operations. isAuthReady: false");
                 messageBox.textContent = dictionary[currentState.language].patientEntry.error;
@@ -816,8 +919,11 @@
             const bpm = getEl('p-bpm').value.trim(); 
             const bp = getEl('p-bp').value.trim(); 
 
-            if (!name || !dob || !complaint || !paramedic || !priority) {
-                console.error("Missing required fields.");
+            if (!name || !dob || !complaint || !paramedic || !priority || !bpm || !bp) {
+                // Show failure for missing data
+                messageBox.textContent = "Please fill in all required fields (Name, DOB, Complaint, Paramedic, Vitals, Priority).";
+                messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-yellow-100 text-yellow-700 block';
+                messageBox.classList.remove('hidden');
                 return;
             }
 
@@ -827,553 +933,512 @@
                 complaint: complaint,
                 paramedic: paramedic,
                 priority: priority,
-                bpm: bpm, 
-                bp: bp, 
-                status: 'receiving', // Always start at receiving
-                timeAtEntry: useMockDb ? Date.now() : serverTimestamp(), // Use serverTimestamp for Firebase
-                timeAtStation: null, // Initially null
-                assignedStaff: null, // Initially null
-                stationLocation: null, // NEW: Initially null
-                submittedBy: userId,
+                bpm: bpm,
+                bp: bp,
+                status: 'receiving',
+                timeAtEntry: useMockDb ? Date.now() : serverTimestamp(),
+                submittedBy: userId || 'N/A',
+                timeAtStation: null,
+                assignedStaff: null,
+                stationLocation: null,
             };
 
             try {
                 if (useMockDb) {
-                    newPatient.id = 'm' + (mockPatients.length + 1);
+                    const newId = `m${mockPatients.length + 1}-${Date.now()}`;
+                    newPatient.id = newId;
                     mockPatients.push(newPatient);
-                    updatePatientLists(mockPatients);
+                    // CRITICAL FIX: Ensure mock DB update triggers list update
+                    updatePatientLists([...mockPatients]); 
                 } else {
-                    if (!db) throw new Error("Firestore instance (db) is null."); // ADDED DEFENSIVE CHECK
-                    const publicPatientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'patients');
-                    await addDoc(publicPatientsRef, newPatient);
+                    const patientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'patients');
+                    await addDoc(patientsRef, newPatient);
                 }
 
-                form.reset();
+                // Success message
                 messageBox.textContent = dictionary[currentState.language].patientEntry.success;
                 messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-green-100 text-green-700 block';
-                window.setTab('receiving'); // Auto-switch to receiving view
-            } catch (e) {
-                console.error("Error adding document: ", e);
+                messageBox.classList.remove('hidden');
+
+                // Clear form fields (except priority)
+                getEl('p-name').value = '';
+                getEl('p-complaint').value = '';
+                getEl('p-paramedic').value = '';
+                getEl('p-bpm').value = '';
+                getEl('p-bp').value = '';
+                
+                // Immediately switch to the receiving tab to show the new patient
+                window.setTab('receiving');
+                
+            } catch (error) {
+                console.error("Error logging patient entry:", error);
                 messageBox.textContent = dictionary[currentState.language].patientEntry.error;
                 messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-red-100 text-red-700 block';
+                messageBox.classList.remove('hidden');
             }
         }
+        window.handlePatientEntry = handlePatientEntry;
 
         /**
-         * Moves patient from 'receiving' to 'station' with staff and location assignment.
+         * Moves a patient from Receiving to Station.
          */
         window.moveToStation = async (patientId, staffName, stationLocation) => {
-            if (!staffName || staffName === '' || !stationLocation || stationLocation === '') {
-                console.warn("Please select a staff member AND a station location before moving to station.");
+            if (!staffName || !stationLocation) {
+                // Show a non-blocking message that assignment fields are required
+                console.warn("Staff and Station location must be selected before moving to station.");
+                // Use a temporary message box or visual cue if necessary, but keep it simple
+                const card = getEl(`patient-card-${patientId}`);
+                if (card) {
+                    card.style.border = '4px solid orange';
+                    setTimeout(() => card.style.border = '', 1500);
+                }
                 return;
             }
-            if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
-            if (!useMockDb && !db) { console.error("Firestore instance (db) is null."); return; } // ADDED DEFENSIVE CHECK
 
-
-            const updateData = {
+            const updates = {
                 status: 'station',
+                timeAtStation: useMockDb ? Date.now() : serverTimestamp(),
                 assignedStaff: staffName,
-                stationLocation: stationLocation, // NEW: Assign location
-                timeAtStation: useMockDb ? Date.now() : serverTimestamp()
+                stationLocation: stationLocation,
+                triageCompletedBy: userId || 'N/A'
             };
 
-            try {
-                if (useMockDb) {
-                    const patientIndex = mockPatients.findIndex(p => p.id === patientId);
-                    if (patientIndex !== -1) {
-                        mockPatients[patientIndex] = { ...mockPatients[patientIndex], ...updateData };
-                        updatePatientLists(mockPatients);
-                    }
-                } else {
-                    const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
-                    await updateDoc(patientRef, updateData);
-                }
-                console.log(`Patient ${patientId} assigned to ${staffName} at ${stationLocation} and moved to Station.`);
-                window.setTab('station');
-            } catch (e) {
-                console.error("Error moving patient to station: ", e);
-            }
+            await updatePatient(patientId, updates);
         };
 
         /**
-         * Updates staff assignment for a patient already in 'station'.
+         * Updates the assigned staff for a patient in the Station view.
          */
         window.updateStaffAssignment = async (patientId, staffName) => {
-            if (!staffName || staffName === '') {
-                console.warn("Please select a staff member for assignment update.");
-                return;
-            }
-            if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
-            if (!useMockDb && !db) { console.error("Firestore instance (db) is null."); return; } // ADDED DEFENSIVE CHECK
-
-
-            const updateData = {
-                assignedStaff: staffName,
-            };
-
-            try {
-                if (useMockDb) {
-                    const patientIndex = mockPatients.findIndex(p => p.id === patientId);
-                    if (patientIndex !== -1) {
-                        mockPatients[patientIndex] = { ...mockPatients[patientIndex], ...updateData };
-                        updatePatientLists(mockPatients);
-                    }
-                } else {
-                    const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
-                    await updateDoc(patientRef, updateData);
-                }
-                console.log(`Patient ${patientId} staff updated to ${staffName}.`);
-            } catch (e) {
-                console.error("Error updating staff assignment: ", e);
-            }
+            if (!staffName) return;
+            const updates = { assignedStaff: staffName };
+            await updatePatient(patientId, updates);
         };
-
+        
         /**
-         * Updates Vitals for a patient already in 'station'.
+         * Updates the vitals for a patient in the Station view.
          */
-        window.updatePatientVitals = async (patientId, newBpm, newBp) => {
-            if ((!newBpm || newBpm.trim() === '') && (!newBp || newBp.trim() === '')) {
-                console.warn("Vitals fields cannot be empty.");
-                return;
-            }
-            if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
-            if (!useMockDb && !db) { console.error("Firestore instance (db) is null."); return; } // ADDED DEFENSIVE CHECK
+        window.updatePatientVitals = async (patientId, newBPM, newBP) => {
+            if (!newBPM && !newBP) return;
 
-
-            const updateData = {};
-
-            if (newBpm && newBpm.trim() !== '') updateData.bpm = newBpm.trim();
-            if (newBp && newBp.trim() !== '') updateData.bp = newBp.trim();
+            const updates = {};
+            if (newBPM) updates.bpm = newBPM;
+            if (newBP) updates.bp = newBP;
             
-            // Close the form
-            getEl(`vitals-form-${patientId}`).classList.add('hidden');
+            const form = getEl(`vitals-form-${patientId}`);
+            if (form) form.classList.add('hidden'); // Hide form on submission
 
-            try {
-                if (useMockDb) {
-                    const patientIndex = mockPatients.findIndex(p => p.id === patientId);
-                    if (patientIndex !== -1) {
-                        mockPatients[patientIndex] = { ...mockPatients[patientIndex], ...updateData };
-                        updatePatientLists(mockPatients);
-                    }
-                } else {
-                    const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
-                    await updateDoc(patientRef, updateData);
-                }
-                console.log(`Patient ${patientId} vitals updated.`);
-            } catch (e) {
-                console.error("Error updating patient vitals: ", e);
-            }
+            await updatePatient(patientId, updates);
         };
 
 
         /**
-         * Discharges and archives a patient.
+         * Archives a patient from the Station list (triggered by modal confirmation).
          */
-        async function handleDischarge(event) {
-            event.preventDefault();
-            
-            // CRITICAL CHECK: Must be ready for DB operations
-            if (!isAuthReady) { console.error("App not ready for DB operations."); return; }
-            
-            const staffName = getEl('discharge-staff-name').value.trim();
+        window.archivePatient = async () => {
+            const patientId = modalPatientId;
+            const dischargedBy = getEl('discharge-staff').value.trim();
             const dischargeDate = getEl('discharge-date').value;
+            const messageBox = getEl('discharge-message-box');
+            
+            messageBox.classList.add('hidden');
 
-            if (!modalPatientId || !staffName || !dischargeDate) {
-                console.error("Missing discharge details.");
+            if (!patientId || !dischargedBy || !dischargeDate) {
+                messageBox.textContent = dictionary[currentState.language].modal.dischargeFailed;
+                messageBox.className = 'mt-2 p-2 rounded-lg text-center bg-red-100 text-red-700 block';
+                messageBox.classList.remove('hidden');
                 return;
             }
 
-            const updateData = {
+            const updates = {
                 status: 'archive',
-                dischargedBy: staffName,
+                dischargedBy: dischargedBy,
                 dischargeDate: dischargeDate,
                 timeAtDischarge: useMockDb ? Date.now() : serverTimestamp(),
+                archivedByUserId: userId || 'N/A'
             };
+
+            await updatePatient(patientId, updates);
+            window.closeModal('discharge-modal');
+        };
+
+        /**
+         * Core function to update a patient record in DB or Mock DB.
+         */
+        async function updatePatient(patientId, updates) {
+            try {
+                if (useMockDb) {
+                    const index = mockPatients.findIndex(p => p.id === patientId);
+                    if (index !== -1) {
+                        mockPatients[index] = { ...mockPatients[index], ...updates };
+                        updatePatientLists([...mockPatients]); // Trigger mock DB update
+                    }
+                } else {
+                    const patientDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientId);
+                    await updateDoc(patientDocRef, updates);
+                }
+            } catch (error) {
+                console.error(`Error updating patient ${patientId}:`, error);
+                // Optionally show error to user
+            }
+        }
+        
+        /**
+         * Clears all patient data from the system (Mock or Firebase).
+         */
+        window.clearAllPatients = async () => {
+            window.closeModal('clear-archive-modal');
+            const messageBox = getEl('archive-message-box');
+            messageBox.classList.add('hidden');
 
             try {
                 if (useMockDb) {
-                    const patientIndex = mockPatients.findIndex(p => p.id === modalPatientId);
-                    if (patientIndex !== -1) {
-                        mockPatients[patientIndex] = { ...mockPatients[patientIndex], ...updateData };
-                        updatePatientLists(mockPatients);
-                    }
+                    mockPatients = [];
+                    updatePatientLists([]); // Clear lists immediately
+                    messageBox.textContent = dictionary[currentState.language].clearModal.success;
+                    messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-green-100 text-green-700 block';
                 } else {
-                    if (!db) throw new Error("Firestore instance (db) is null."); // ADDED DEFENSIVE CHECK
-                    const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patients', modalPatientId);
-                    await updateDoc(patientRef, updateData);
+                    const patientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'patients');
+                    const snapshot = await getDocs(patientsRef);
+                    
+                    if (snapshot.empty) {
+                        messageBox.textContent = dictionary[currentState.language].clearModal.success;
+                        messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-green-100 text-green-700 block';
+                        messageBox.classList.remove('hidden');
+                        return;
+                    }
+
+                    const batch = writeBatch(db);
+                    snapshot.docs.forEach((d) => {
+                        batch.delete(d.ref);
+                    });
+                    await batch.commit();
+                    messageBox.textContent = dictionary[currentState.language].clearModal.success;
+                    messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-green-100 text-green-700 block';
                 }
-                console.log(`Patient ${modalPatientId} archived.`);
-                window.closeModal();
-                window.setTab('archive');
-            } catch (e) {
-                console.error("Error archiving patient: ", e);
-                // Show message box error if possible, but for simplicity, console log here
+            } catch (error) {
+                console.error("Error clearing all patients:", error);
+                messageBox.textContent = dictionary[currentState.language].clearModal.error;
+                messageBox.className = 'mt-4 p-3 rounded-lg text-center bg-red-100 text-red-700 block';
+            } finally {
+                 messageBox.classList.remove('hidden');
             }
-        }
+        };
+
 
         /**
-         * Initializes Firebase and handles authentication.
+         * Authentication and Initialization
          */
         async function initializeFirebase() {
-            if (firebaseConfig) {
-                try {
-                    // Initialize app and services
-                    app = initializeApp(firebaseConfig);
-                    // CRITICAL: Assign db here
-                    db = getFirestore(app);
-                    auth = getAuth(app);
+            if (!firebaseConfig) {
+                console.warn("Firebase config not available. Running in Mock Database mode.");
+                useMockDb = true;
+                isAuthReady = true; // Ready for mock operations
+                userId = 'MOCK-USER';
+                setupPatientListener();
+                return;
+            }
 
-                    // Sign in with custom token or anonymously
-                    const user = auth.currentUser;
-                    if (!user) {
-                        if (initialAuthToken) {
-                            await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    }
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
 
-                    // Set up Auth State Change Listener
-                    onAuthStateChanged(auth, (user) => {
-                        if (user) {
-                            userId = user.uid;
-                        } else {
-                            userId = crypto.randomUUID();
-                        }
-                        
-                        // CRITICAL: Set isAuthReady only after the user ID is determined
+                // Try to sign in with custom token, fall back to anonymous
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
                         isAuthReady = true;
-                        console.log(`Auth Ready. User ID: ${userId}`);
-                        setupPatientListener(); // Start data listener ONLY after auth is confirmed
-                        startUpdateTimer();
-                        render(); // Initial render to show user ID
-                    });
+                        console.log("Firebase Auth successful. User ID:", userId);
+                        setupPatientListener();
+                    } else {
+                        // This case should ideally not happen if token/anon sign-in works, but acts as a safety fallback.
+                        console.error("Firebase Auth state failed or logged out.");
+                        isAuthReady = false;
+                        userId = null;
+                        render();
+                    }
+                });
 
-                } catch (e) {
-                    console.error("Firebase initialization failed. Falling back to Mock DB.", e);
-                    // Critical failure, use mock DB
+            } catch (error) {
+                console.error("Firebase initialization or authentication failed:", error);
+                // Hard fallback to mock data if setup fails
+                if (!useMockDb) {
                     useMockDb = true;
                     isAuthReady = true;
                     userId = 'MOCK-USER';
+                    console.log("Hard fallback to Mock Database due to Firebase error.");
                     setupPatientListener();
-                    startUpdateTimer();
-                    render(); // Initial render for mock DB
                 }
-            } else {
-                console.error("Firebase config not available. Using Mock DB.");
-                // Critical failure, use mock DB
-                useMockDb = true;
-                isAuthReady = true;
-                userId = 'MOCK-USER';
-                setupPatientListener();
-                startUpdateTimer();
-                render(); // Initial render for mock DB
             }
+            
+            // Start the timer interval for updating elapsed times every second
+            if (updateTimerInterval) clearInterval(updateTimerInterval);
+            updateTimerInterval = setInterval(renderTimers, 1000);
         }
 
         /**
-         * Starts the interval to refresh timers every second.
+         * Renders the elapsed time for all visible patient timers without full UI re-render.
          */
-        function startUpdateTimer() {
-            // Clear any existing interval
-            if (updateTimerInterval) clearInterval(updateTimerInterval);
-
-            updateTimerInterval = setInterval(() => {
-                // Only update the timers in the active view
-                let patientsToUpdate = [];
-                if (currentState.activeTab === 'receiving') {
-                    patientsToUpdate = receivingPatients;
-                } else if (currentState.activeTab === 'station') {
-                    patientsToUpdate = stationPatients;
+        function renderTimers() {
+            allPatients.forEach(patient => {
+                const timerEl = getEl(`timer-${patient.id}`);
+                if (timerEl) {
+                    const timeKey = patient.status === 'station' ? 'timeAtStation' : 'timeAtEntry';
+                    timerEl.textContent = formatTimeSince(patient[timeKey]);
                 }
-
-                patientsToUpdate.forEach(patient => {
-                    const timerEl = getEl(`timer-${patient.id}`);
-                    if (timerEl) {
-                        const timeKey = currentState.activeTab === 'station' ? 'timeAtStation' : 'timeAtEntry';
-                        timerEl.textContent = formatTimeSince(patient[timeKey]);
-                    }
-                });
-                
-                // Also check if the 'receiving' tab button needs to blink
-                const receivingBtn = getEl('btn-receiving');
-                if (receivingBtn && currentState.activeTab !== 'receiving') {
-                    const shouldBlink = receivingPatients.length > 0;
-                    receivingBtn.classList.toggle('blinking-red', shouldBlink);
-                }
-
-            }, 1000); // Update every second
+            });
         }
 
-
-        // --- Event Listeners and Initialization ---
-
-        window.onload = () => {
-            initializeAudio(); // Initialize audio before Firebase
-            initializeFirebase();
-            render(); // Initial render before data loads
-
-            getEl('language-toggle')?.addEventListener('click', window.toggleLanguage);
-            getEl('patient-entry-form')?.addEventListener('submit', handlePatientEntry);
-            getEl('discharge-form')?.addEventListener('submit', handleDischarge);
-        };
-        
-        // Expose functions to global window scope for inline HTML handlers
-        window.setTab = window.setTab;
-        window.toggleLanguage = window.toggleLanguage;
-        window.openModal = window.openModal;
-        window.closeModal = window.closeModal;
-        // Updated and new exposed functions
-        window.moveToStation = window.moveToStation;
-        window.updateStaffAssignment = window.updateStaffAssignment;
-        window.updatePatientVitals = window.updatePatientVitals;
-
+        // Initialize on load
+        window.onload = initializeFirebase;
     </script>
-    <style>
-        /* Custom font import for a professional look */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8fafc; /* Light gray background */
-        }
-        .main-container {
-            min-height: calc(100vh - 80px); /* Account for header */
-        }
-        /* Custom focus state for accessibility */
-        .tab-btn:focus, .lang-btn:focus {
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.5); /* Blue ring */
-        }
-        /* CSS for the blinking effect (ONLY APPLIES TO THE TAB BUTTON) */
-        .blinking-red {
-            animation: blink-animation 1s steps(5, start) infinite;
-            background-color: #fee2e2 !important; /* Red-100 */
-            color: #991b1b !important; /* Red-800 */
-            border-color: #f87171 !important; /* Red-400 */
-        }
-        @keyframes blink-animation {
-            to {
-                visibility: hidden;
-            }
-        }
-        /* Modal Backdrop */
-        .modal-backdrop {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 50;
-        }
-    </style>
 </head>
-<body class="text-gray-800">
-
-    <!-- Header & Navigation -->
-    <header class="bg-white shadow-md sticky top-0 z-10">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <!-- Logo/Brand -->
-            <div class="flex items-center space-x-2">
-                <div class="text-2xl font-extrabold text-blue-600">SAMS</div>
-                <div id="header-slogan" class="text-sm text-gray-500 hidden sm:block"></div>
+<body class="min-h-screen flex flex-col">
+    <!-- Main Header -->
+    <header class="header-fixed bg-white shadow-md p-4">
+        <div class="max-w-7xl mx-auto flex justify-between items-center flex-wrap">
+            <div class="flex items-center space-x-3">
+                <span data-lucide="shield-check" class="w-6 h-6 text-blue-600"></span>
+                <h1 id="page-title" class="text-xl font-extrabold text-gray-800">SAMS</h1>
+                <p id="header-slogan" class="text-xs text-gray-500 hidden sm:block">Real-time Clinical Intake & Triage</p>
             </div>
-
-            <div class="flex items-center space-x-4">
-                <!-- User ID Display (Important for multi-user context) -->
-                <div class="text-xs text-gray-500">
-                    <span id="user-id-text">User ID:</span> <span id="user-id-display" class="font-mono text-gray-700">Loading...</span>
+            
+            <div class="flex items-center space-x-4 mt-2 sm:mt-0">
+                <!-- User ID Display -->
+                <div class="text-xs text-gray-500 hidden md:flex items-center">
+                    <span id="user-id-text" class="font-semibold mr-1">User ID:</span>
+                    <span id="user-id-display" class="font-mono bg-gray-100 p-1 rounded-md text-xs">Loading...</span>
                 </div>
                 <!-- Language Toggle -->
-                <button id="language-toggle" class="lang-btn flex items-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-3 rounded-lg transition duration-200 text-sm">
-                    <span id="current-lang-text">EN</span>
-                    <span data-lucide="globe" class="w-4 h-4 ml-2"></span>
+                <button onclick="window.toggleLanguage()" class="flex items-center bg-gray-100 p-2 rounded-full hover:bg-gray-200 transition duration-200">
+                    <span data-lucide="globe" class="w-4 h-4 mr-1 text-gray-600"></span>
+                    <span id="current-lang-text" class="text-xs font-semibold text-gray-700">DE</span>
                 </button>
             </div>
         </div>
+        
+        <!-- Navigation Tabs -->
+        <nav class="mt-4 border-t pt-3 overflow-x-auto">
+            <div id="tab-nav" class="flex max-w-7xl mx-auto space-x-2 sm:space-x-4">
+                <!-- Tab buttons will be rendered here -->
+            </div>
+        </nav>
     </header>
 
     <!-- Main Content Area -->
-    <main class="main-container max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-
-        <!-- Title -->
-        <h1 id="page-title" class="text-3xl sm:text-4xl font-bold text-blue-800 mb-6 text-center"></h1>
-        
-        <!-- Tab Navigation (Desktop and Mobile) -->
-        <div class="bg-white p-2 rounded-xl shadow-lg mb-8 overflow-x-auto">
-            <nav id="tab-nav" class="flex space-x-1 sm:space-x-2 justify-center">
-                <!-- Tab buttons will be inserted here by JavaScript -->
-            </nav>
-        </div>
-
-        <!-- Dynamic Content Section -->
-        <div id="content-container" class="space-y-8">
+    <main class="flex-grow p-4 sm:p-6">
+        <div class="max-w-7xl mx-auto">
             
-            <!-- Home/Start Content -->
-            <div id="tab-home" class="tab-content bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-blue-600">
-                <h2 id="home-heading" class="text-2xl font-semibold text-gray-900 mb-4"></h2>
-                <p id="home-paragraph-1" class="text-gray-600 mb-4 leading-relaxed"></p>
-                <p id="home-paragraph-2" class="text-gray-600 leading-relaxed"></p>
-            </div>
-
-            <!-- Patient Entry / Patienteneingabe Content -->
-            <div id="tab-patientEntry" class="tab-content hidden bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-green-600">
-                <h2 id="patientEntry-heading" class="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    <span data-lucide="user-plus" class="w-6 h-6 mr-2 text-green-600"></span>
-                </h2>
+            <!-- Home Tab -->
+            <section id="tab-home" class="space-y-6">
+                <div class="bg-white p-8 rounded-xl shadow-lg border-t-4 border-blue-500">
+                    <h2 id="home-heading" class="text-3xl font-bold text-gray-800 mb-3">Welcome to SAMS Intake System</h2>
+                    <p id="home-paragraph-1" class="text-gray-600 mb-4">This interface is designed for rapid patient entry...</p>
+                    <p id="home-paragraph-2" class="text-gray-600 border-t pt-4">The Receiving tab shows all pending patients...</p>
+                </div>
                 
-                <form id="patient-entry-form" class="space-y-4 max-w-lg mx-auto">
-                    <!-- Patient Details -->
+                <!-- Audio Status Box -->
+                <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500 flex justify-between items-center">
                     <div>
-                        <label for="p-name" id="p-name-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                        <input type="text" id="p-name" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
-                    </div>
-                    <div>
-                        <label for="p-dob" id="p-dob-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                        <input type="date" id="p-dob" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
-                    </div>
-                    <div>
-                        <label for="p-complaint" id="p-complaint-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                        <textarea id="p-complaint" rows="3" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500"></textarea>
-                    </div>
-
-                    <!-- Vitals Section (New) -->
-                    <div class="pt-4 border-t border-gray-200">
-                        <h3 id="vitals-heading" class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                            <span data-lucide="heart-pulse" class="w-5 h-5 mr-2 text-red-500"></span>
-                        </h3>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label for="p-bpm" id="p-bpm-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                                <input type="number" id="p-bpm" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="e.g. 85">
-                            </div>
-                            <div>
-                                <label for="p-bp" id="p-bp-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                                <input type="text" id="p-bp" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="e.g. 120/80">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Paramedic & Priority Section -->
-                    <div class="pt-4 border-t border-gray-200 space-y-4">
-                        <div>
-                            <label for="p-paramedic" id="p-paramedic-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                            <input type="text" id="p-paramedic" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" placeholder="e.g. EMT Smith / Ambulance Team 4">
-                        </div>
-                        <div>
-                            <label for="p-priority" id="p-priority-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                            <select id="p-priority" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 bg-white">
-                                <!-- Options populated by JS render function -->
-                            </select>
-                        </div>
-                    </div>
-
-                    <button type="submit" id="patientEntry-submit-btn" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition duration-200 shadow-md"></button>
-                    <div id="patient-message-box" class="mt-4 p-3 rounded-lg text-center hidden" role="alert"></div>
-                </form>
-            </div>
-
-            <!-- Receiving / Empfang Content -->
-            <div id="tab-receiving" class="tab-content hidden bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-red-600">
-                <h2 id="receiving-heading" class="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    <span data-lucide="clipboard-list" class="w-6 h-6 mr-2 text-red-600"></span>
-                </h2>
-                <div id="receiving-list-container" class="space-y-4">
-                    <!-- Patient cards/loading/empty states will be rendered here by JS -->
-                </div>
-            </div>
-
-            <!-- Station / Station Content -->
-            <div id="tab-station" class="tab-content hidden bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-blue-600">
-                <h2 id="station-heading" class="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    <span data-lucide="hospital" class="w-6 h-6 mr-2 text-blue-600"></span>
-                </h2>
-                <div id="station-list-container" class="space-y-4">
-                    <!-- Patient cards will be rendered here -->
-                </div>
-            </div>
-
-            <!-- Archive / Archiv Content -->
-            <div id="tab-archive" class="tab-content hidden bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-gray-400">
-                <h2 id="archive-heading" class="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    <span data-lucide="archive" class="w-6 h-6 mr-2 text-gray-600"></span>
-                </h2>
-                <div id="archive-list-container" class="space-y-4">
-                    <!-- Patient cards will be rendered here -->
-                </div>
-            </div>
-
-            <!-- Contact / Kontakt Content -->
-            <div id="tab-contact" class="tab-content hidden bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-gray-600">
-                <h2 id="contact-heading" class="text-2xl font-semibold text-gray-900 mb-4 flex items-center">
-                    <span data-lucide="mail" class="w-6 h-6 mr-2 text-gray-600"></span>
-                </h2>
-                <div class="grid md:grid-cols-2 gap-6">
-                    <div>
-                        <h3 id="contact-address-title" class="font-bold text-lg text-gray-700 mb-2"></h3>
-                        <p class="text-gray-600">
-                            San Andres Medical Service (SAMS)<br>
-                            123 Health Ave, San Andres City<br>
-                            CA 90210, Country<br>
+                        <h3 id="audio-status-heading" class="text-xl font-bold text-gray-800 mb-1">Audio Status</h3>
+                        <p id="audio-status-desc" class="text-sm text-gray-500 mb-3">The browser requires a user interaction to enable sound alerts.</p>
+                        <p id="audio-status" class="flex items-center text-sm font-semibold text-red-600">
+                            <span data-lucide="bell-off" class="w-4 h-4 mr-2"></span> Audio Blocked (Click to enable)
                         </p>
                     </div>
-                    <div>
-                        <h3 id="contact-details-title" class="font-bold text-lg text-gray-700 mb-2"></h3>
-                        <p id="contact-phone" class="text-gray-600 mb-1">Phone: +1 555-SAMS-HELP</p>
-                        <p id="contact-email" class="text-gray-600">Email: info@sams.com</p>
+                    <button id="enable-audio-btn" onclick="window.enableAudio()" class="bg-green-600 text-white font-medium py-3 px-6 rounded-lg hover:bg-green-700 transition duration-200 shadow-lg hidden">
+                        Enable Audio
+                    </button>
+                </div>
+            </section>
+
+            <!-- Patient Entry Tab -->
+            <section id="tab-patientEntry" class="hidden">
+                <div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+                    <h2 id="patientEntry-heading" class="text-2xl font-bold text-gray-800 mb-6 flex items-center border-b pb-3">ER Patient Quick Entry</h2>
+                    
+                    <form id="patient-entry-form" onsubmit="window.handlePatientEntry(event)" class="space-y-6">
+                        
+                        <!-- Personal Info Group -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="p-name" id="p-name-label" class="block text-sm font-medium text-gray-700 mb-1">Patient Full Name</label>
+                                <input type="text" id="p-name" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
+                            </div>
+                            <div>
+                                <label for="p-dob" id="p-dob-label" class="block text-sm font-medium text-gray-700 mb-1">Date of Birth (DOB)</label>
+                                <input type="date" id="p-dob" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
+                            </div>
+                        </div>
+
+                        <!-- Complaint and Source Group -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                             <div>
+                                <label for="p-complaint" id="p-complaint-label" class="block text-sm font-medium text-gray-700 mb-1">Chief Complaint (Symptoms/Injury)</label>
+                                <input type="text" id="p-complaint" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
+                            </div>
+                            <div>
+                                <label for="p-paramedic" id="p-paramedic-label" class="block text-sm font-medium text-gray-700 mb-1">Paramedic/Sending Team Name</label>
+                                <input type="text" id="p-paramedic" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
+                            </div>
+                        </div>
+                        
+                        <!-- Vitals and Priority Group -->
+                        <div class="border border-red-300 p-4 rounded-xl space-y-4">
+                            <h3 id="vitals-heading" class="text-lg font-semibold text-gray-800 flex items-center">Initial Vitals</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label for="p-bpm" id="p-bpm-label" class="block text-sm font-medium text-gray-700 mb-1">BPM (Heart Rate)</label>
+                                    <input type="number" id="p-bpm" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500">
+                                </div>
+                                <div>
+                                    <label for="p-bp" id="p-bp-label" class="block text-sm font-medium text-gray-700 mb-1">Blood Pressure (Sys/Dia)</label>
+                                    <input type="text" id="p-bp" placeholder="e.g., 120/80" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500">
+                                </div>
+                                <div>
+                                    <label for="p-priority" id="p-priority-label" class="block text-sm font-medium text-gray-700 mb-1">Triage Priority</label>
+                                    <select id="p-priority" required class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500">
+                                        <!-- Options populated by render() -->
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="patientEntry-submit-btn" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition duration-200 shadow-md">Log Patient Entry</button>
+                    </form>
+                    
+                    <!-- Message Box -->
+                    <div id="patient-message-box" class="hidden mt-4 p-3 rounded-lg text-center font-medium"></div>
+                </div>
+            </section>
+            
+            <!-- Receiving Tab -->
+            <section id="tab-receiving" class="hidden space-y-6">
+                <h2 id="receiving-heading" class="text-2xl font-bold text-gray-800 flex items-center border-b pb-3">Incoming Patients (Awaiting Triage) (0)</h2>
+                <div id="receiving-list-container" class="space-y-4">
+                    <!-- Patient cards for 'receiving' status will be injected here -->
+                </div>
+            </section>
+            
+            <!-- Station Tab -->
+            <section id="tab-station" class="hidden space-y-6">
+                <h2 id="station-heading" class="text-2xl font-bold text-gray-800 flex items-center border-b pb-3">Active Patients (Assigned Station) (0)</h2>
+                <div id="station-list-container" class="space-y-4">
+                    <!-- Patient cards for 'station' status will be injected here -->
+                </div>
+            </section>
+
+            <!-- Archive Tab -->
+            <section id="tab-archive" class="hidden space-y-6">
+                <h2 id="archive-heading" class="text-2xl font-bold text-gray-800 flex items-center border-b pb-3">Archived/Discharged Patients (0)</h2>
+                
+                <!-- Clear All Button and Message Box -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-gray-200 rounded-xl shadow-inner">
+                    <p class="text-sm font-medium text-gray-700 mb-3 sm:mb-0">
+                        <span data-lucide="database" class="w-4 h-4 inline mr-1 text-gray-600"></span>
+                        Data Management Tools:
+                    </p>
+                    <button id="clear-archive-btn" onclick="window.openClearModal()" class="w-full sm:w-auto bg-red-700 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-800 transition duration-200 shadow-lg text-sm flex items-center justify-center">
+                        Clear All Archived Patients
+                    </button>
+                </div>
+                <div id="archive-message-box" class="hidden mt-2 p-3 rounded-lg text-center font-medium"></div>
+
+                <div id="archive-list-container" class="space-y-4">
+                    <!-- Patient cards for 'archive' status will be injected here -->
+                </div>
+            </section>
+
+            <!-- Contact Tab -->
+            <section id="tab-contact" class="hidden">
+                <div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+                    <h2 id="contact-heading" class="text-2xl font-bold text-gray-800 mb-6 flex items-center border-b pb-3">Contact Us</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <!-- Details Column -->
+                        <div class="space-y-6">
+                            <h3 id="contact-address-title" class="text-xl font-semibold text-blue-600">Our Location</h3>
+                            <p class="text-gray-600">123 Emergency Lane<br>Triage City, TX 78701<br>United States</p>
+                            
+                            <h3 id="contact-details-title" class="text-xl font-semibold text-blue-600">General Inquiries</h3>
+                            <div class="space-y-2 text-gray-600">
+                                <p class="flex items-center"><span data-lucide="phone" class="w-4 h-4 mr-2 text-blue-500"></span> (555) 123-4567</p>
+                                <p class="flex items-center"><span data-lucide="mail" class="w-4 h-4 mr-2 text-blue-500"></span> info@sams-er.com</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Contact Form Column -->
+                        <div class="md:col-span-2 bg-gray-50 p-6 rounded-xl shadow-inner">
+                            <h3 id="contact-form-title" class="text-xl font-semibold text-gray-800 mb-4">Send a Message</h3>
+                            <form class="space-y-4">
+                                <input type="text" id="contact-name-placeholder" placeholder="Your Name" class="w-full p-3 border border-gray-300 rounded-lg">
+                                <input type="email" id="contact-email-placeholder" placeholder="Your Email" class="w-full p-3 border border-gray-300 rounded-lg">
+                                <textarea id="contact-message-placeholder" placeholder="Your Message" rows="4" class="w-full p-3 border border-gray-300 rounded-lg"></textarea>
+                                <button type="submit" id="contact-submit-btn" class="w-full bg-blue-600 text-white font-medium py-3 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md">Send Message</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
-                <div class="mt-8">
-                    <h3 id="contact-form-title" class="font-bold text-lg text-gray-700 mb-4"></h3>
-                    <form>
-                        <input id="contact-name-placeholder" type="text" placeholder="" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
-                        <input id="contact-email-placeholder" type="email" placeholder="" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
-                        <textarea id="contact-message-placeholder" rows="4" placeholder="" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></textarea>
-                        <button id="contact-submit-btn" type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md"></button>
-                    </form>
-                </div>
-            </div>
+            </section>
 
         </div>
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 text-white mt-10 p-4">
+    <footer class="bg-gray-800 text-white p-4">
         <div class="max-w-7xl mx-auto text-center text-sm">
-            &copy; <span id="footer-year"></span> San Andres Medical Service (SAMS). <span id="footer-rights"></span>
+            &copy; <span id="footer-year">2024</span> SAMS | <span id="footer-rights">All rights reserved.</span>
         </div>
     </footer>
 
     <!-- Discharge Confirmation Modal -->
-    <div id="discharge-modal" class="modal-backdrop hidden transition-opacity duration-300 opacity-0">
-        <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl max-w-lg w-full transform transition-all duration-300 scale-95">
-            <h3 id="modal-title" class="text-2xl font-bold text-blue-800 mb-4 flex items-center">
-                <span data-lucide="shield-check" class="w-6 h-6 mr-2 text-blue-600"></span>
-            </h3>
-            <p id="modal-patient-name" class="text-lg text-gray-700 mb-4"></p>
+    <div id="discharge-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 transition-opacity duration-300 hidden opacity-0">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 transform transition-all">
+            <h3 id="modal-title" class="text-xl font-bold text-gray-800 mb-4 flex items-center border-b pb-3">Confirm Patient Discharge</h3>
             
-            <form id="discharge-form" class="space-y-4">
+            <p id="modal-patient-name" class="text-lg font-semibold text-blue-700 mb-4">Patient Name</p>
+            
+            <form onsubmit="event.preventDefault(); window.archivePatient()" class="space-y-4">
                 <div>
-                    <label for="discharge-staff-name" id="modal-staff-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                    <input type="text" id="discharge-staff-name" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Dr. John Doe">
+                    <label for="discharge-staff" id="modal-staff-label" class="block text-sm font-medium text-gray-700 mb-1">Staff Name (Doctor/Nurse)</label>
+                    <input type="text" id="discharge-staff" required class="w-full p-3 border border-gray-300 rounded-lg">
                 </div>
                 <div>
-                    <label for="discharge-date" id="modal-date-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                    <input type="date" id="discharge-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
+                    <label for="discharge-date" id="modal-date-label" class="block text-sm font-medium text-gray-700 mb-1">Discharge Date</label>
+                    <input type="date" id="discharge-date" required class="w-full p-3 border border-gray-300 rounded-lg">
                 </div>
+                
+                <div id="discharge-message-box" class="hidden font-medium text-sm"></div>
+
                 <div class="flex justify-end space-x-3 pt-4">
-                    <button type="button" onclick="window.closeModal()" id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition duration-200"></button>
-                    <button type="submit" id="modal-confirm-btn" class="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition duration-200 shadow-md"></button>
+                    <button type="button" id="modal-cancel-btn" onclick="window.closeModal('discharge-modal')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition duration-150">Cancel</button>
+                    <button type="submit" id="modal-confirm-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition duration-150">Confirm & Archive</button>
                 </div>
             </form>
         </div>
     </div>
-    <!-- End Discharge Confirmation Modal -->
-
+    
+    <!-- Clear All Data Confirmation Modal -->
+    <div id="clear-archive-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 transition-opacity duration-300 hidden opacity-0">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all border-t-4 border-red-500">
+            <h3 id="clear-modal-title" class="text-xl font-bold text-gray-800 mb-4 flex items-center border-b pb-3">Confirmation: Clear All Patient Data</h3>
+            
+            <p id="clear-modal-message" class="text-red-700 font-medium mb-6">
+                Are you sure you want to permanently delete ALL patient records (Receiving, Station, and Archive)? This action cannot be undone.
+            </p>
+            
+            <div class="flex justify-end space-x-3 pt-4">
+                <button type="button" id="clear-modal-cancel-btn" onclick="window.closeModal('clear-archive-modal')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition duration-150">Cancel</button>
+                <button type="button" id="clear-modal-confirm-btn" onclick="window.clearAllPatients()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition duration-150 shadow-md">Delete All Records</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
