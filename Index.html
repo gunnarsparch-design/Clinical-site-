@@ -122,7 +122,7 @@
                         <textarea id="p-complaint" rows="3" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500"></textarea>
                     </div>
 
-                    <!-- Vitals Section (New) -->
+                    <!-- Vitals Section -->
                     <div class="pt-4 border-t border-gray-200">
                         <h3 id="vitals-heading" class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
                             <span data-lucide="heart-pulse" class="w-5 h-5 mr-2 text-red-500"></span>
@@ -173,8 +173,30 @@
                 <h2 id="station-heading" class="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
                     <span data-lucide="hospital" class="w-6 h-6 mr-2 text-blue-600"></span>
                 </h2>
-                <div id="station-list-container" class="space-y-4">
-                    <!-- Patient cards will be rendered here -->
+                
+                <!-- Capacity Counters -->
+                <div id="capacity-display" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    <!-- Capacity details will be rendered here -->
+                </div>
+
+                <!-- Recovery Section -->
+                <div class="mb-8">
+                    <h3 id="recovery-heading" class="text-xl font-bold text-green-700 mb-4 flex items-center border-b pb-2">
+                        <span data-lucide="bed" class="w-5 h-5 mr-2"></span>
+                    </h3>
+                    <div id="recovery-list-container" class="space-y-4">
+                        <!-- Recovery patient cards will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- ICU Section -->
+                <div>
+                    <h3 id="icu-heading" class="text-xl font-bold text-red-700 mb-4 flex items-center border-b pb-2">
+                        <span data-lucide="heart-pulse" class="w-5 h-5 mr-2"></span>
+                    </h3>
+                    <div id="icu-list-container" class="space-y-4">
+                        <!-- ICU patient cards will be rendered here -->
+                    </div>
                 </div>
             </div>
 
@@ -229,7 +251,7 @@
         </div>
     </footer>
 
-    <!-- Discharge Confirmation Modal -->
+    <!-- 1. Discharge Confirmation Modal -->
     <div id="discharge-modal" class="modal-backdrop hidden transition-opacity duration-300 opacity-0">
         <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl max-w-lg w-full transform transition-all duration-300 scale-95">
             <h3 id="modal-title" class="text-2xl font-bold text-blue-800 mb-4 flex items-center">
@@ -247,13 +269,65 @@
                     <input type="date" id="discharge-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
                 </div>
                 <div class="flex justify-end space-x-3 pt-4">
-                    <button type="button" onclick="window.closeModal()" id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition duration-200"></button>
+                    <button type="button" onclick="window.closeModal('discharge-modal')" id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition duration-200"></button>
                     <button type="submit" id="modal-confirm-btn" class="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition duration-200 shadow-md"></button>
                 </div>
             </form>
         </div>
     </div>
     <!-- End Discharge Confirmation Modal -->
+    
+    <!-- 2. Area Assignment Modal (Receiving -> Station) -->
+    <div id="area-assignment-modal" class="modal-backdrop hidden transition-opacity duration-300 opacity-0">
+        <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl max-w-lg w-full transform transition-all duration-300 scale-95">
+            <h3 id="area-modal-title" class="text-2xl font-bold text-red-700 mb-4 flex items-center">
+                <span data-lucide="link" class="w-6 h-6 mr-2"></span>
+            </h3>
+            <p id="area-modal-patient-name" class="text-lg text-gray-700 mb-4"></p>
+            
+            <form id="area-assignment-form" class="space-y-4">
+                <div>
+                    <label for="target-area" id="area-modal-target-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                    <select id="target-area" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 bg-white">
+                        <option value="recovery" id="area-option-recovery"></option>
+                        <option value="icu" id="area-option-icu"></option>
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" onclick="window.closeModal('area-assignment-modal')" id="area-modal-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition duration-200"></button>
+                    <button type="submit" id="area-modal-confirm-btn" class="px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-200 shadow-md"></button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- End Area Assignment Modal -->
+    
+    <!-- 3. Staff & Notes Modal (Station View Updates) -->
+    <div id="staff-notes-modal" class="modal-backdrop hidden transition-opacity duration-300 opacity-0">
+        <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl max-w-lg w-full transform transition-all duration-300 scale-95">
+            <h3 id="staff-notes-modal-title" class="text-2xl font-bold text-blue-800 mb-4 flex items-center">
+                <span data-lucide="clipboard-edit" class="w-6 h-6 mr-2"></span>
+            </h3>
+            <p id="staff-notes-modal-patient-name" class="text-lg text-gray-700 mb-4"></p>
+            
+            <form id="staff-notes-form" class="space-y-4">
+                <div>
+                    <label for="update-staff-name" id="staff-notes-staff-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                    <input type="text" id="update-staff-name" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Dr. Jane Smith">
+                </div>
+                <div>
+                    <label for="update-notes" id="staff-notes-notes-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
+                    <textarea id="update-notes" rows="4" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Add clinical notes, medication, or status updates..."></textarea>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" onclick="window.closeModal('staff-notes-modal')" id="staff-notes-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition duration-200"></button>
+                    <button type="submit" id="staff-notes-confirm-btn" class="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition duration-200 shadow-md"></button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- End Staff & Notes Modal -->
+
 
     <!-- Firebase Imports -->
     <script type="module">
@@ -274,24 +348,28 @@
         let isAuthReady = false;
         let useMockDb = false;
         
+        // --- System Constants ---
+        const CAPACITIES = {
+            recovery: 6, // Aufwachraum: 6 Betten
+            icu: 4       // ICU: 4 rooms
+        };
+
         // All patients loaded from DB/Mock DB
         let allPatients = []; 
         // Derived lists for UI
         let receivingPatients = []; 
-        let stationPatients = [];
+        let icuPatients = [];
+        let recoveryPatients = [];
         let archivedPatients = [];
         let mockPatients = []; // Mock database for when Firebase is unavailable
 
-        // Mock Staff for assignment feature
-        const mockStaff = [
-            { id: 'DR101', name: 'Dr. Emily Carter', role: 'Doctor' },
-            { id: 'DR102', name: 'Dr. Ben Jones', role: 'Doctor' },
-            { id: 'NR201', name: 'Nurse Lisa Kim', role: 'Nurse' },
-            { id: 'NR202', name: 'Nurse David Chen', role: 'Nurse' },
-        ];
+        // State for the modals
+        let dischargeModalPatientId = null;
+        let areaModalPatientId = null;
+        let staffNotesModalPatientId = null;
+
         
         // Dictionary for multilingual content
-        // MOVED THIS BLOCK UP TO RESOLVE "Cannot access 'dictionary' before initialization" ERROR
         const dictionary = {
             en: {
                 title: "SAMS | Emergency Patient Flow",
@@ -308,7 +386,7 @@
                 home: {
                     heading: "Welcome to SAMS Intake System",
                     p1: "This interface is designed for rapid patient entry and triage management in the Emergency Room. Please use the Patient Entry tab to log incoming patients immediately.",
-                    p2: "The Receiving tab shows all pending patients awaiting clinical assignment. The Station tab tracks active patients, and the Archive tab holds discharged records. This list is updated in real-time.",
+                    p2: "The Receiving tab shows all pending patients awaiting clinical assignment. The Station tab tracks active patients in ICU/Recovery, and the Archive tab holds discharged records. This list is updated in real-time.",
                 },
                 patientEntry: {
                     heading: "ER Patient Quick Entry",
@@ -329,7 +407,7 @@
                     heading: "Incoming Patients (Awaiting Triage)",
                     loading: "Loading patients...",
                     empty: "No patients currently awaiting triage.",
-                    receiveBtn: "Move to Station", 
+                    receiveBtn: "Assign Area & Move to Station", 
                     priority: "Priority:",
                     complaint: "Complaint:",
                     time: "Time:",
@@ -338,16 +416,26 @@
                     paramedic: "Paramedic:", 
                 },
                 station: {
-                    heading: "Active Patients (Assigned Station)",
+                    heading: "Active Patients (ICU & Recovery)",
+                    capacity: "Capacity:",
+                    icu: {
+                        heading: "Intensive Care Unit (ICU)",
+                        subtext: `Max ${CAPACITIES.icu} Rooms`
+                    },
+                    recovery: {
+                        heading: "Recovery Room (Aufwachraum)",
+                        subtext: `Max ${CAPACITIES.recovery} Beds`
+                    },
                     loading: "Loading active patients...",
-                    empty: "No patients currently assigned to a station.",
+                    empty: "No patients currently assigned to this area.",
                     releaseBtn: "Release Patient / Archive", 
+                    updateBtn: "Update Clinical Details",
                     priority: "Priority:",
                     complaint: "Complaint:",
                     time: "Time at Station:",
                     submitter: "Triage/Assignment by:",
-                    assigned: "Assigned:",
-                    assignBtn: "Assign Staff",
+                    assignedStaff: "Assigned Staff:",
+                    notes: "Clinical Notes:",
                     unassigned: "Unassigned",
                     vitals: "Vitals:", 
                     paramedic: "Paramedic:", 
@@ -363,8 +451,8 @@
                     dischargeDate: "Discharge Date:", 
                     submitter: "Triage/Assignment by:", 
                     cleared: "Archive cleared successfully.",
-                    vitals: "Vitals:", 
-                    paramedic: "Paramedic:", 
+                    vitals: "Vitalwerte:", 
+                    paramedic: "Notarzt/Team:", 
                 },
                 contact: {
                     heading: "Contact Us",
@@ -377,12 +465,21 @@
                     submitBtn: "Send Message",
                 },
                 modal: { 
-                    title: "Confirm Patient Discharge",
+                    dischargeTitle: "Confirm Patient Discharge",
                     staffLabel: "Staff Name (Doctor/Nurse)",
                     dateLabel: "Discharge Date",
                     cancelBtn: "Cancel",
                     confirmBtn: "Confirm & Archive",
-                    dischargeFailed: "Discharge failed. Please check the form and try again."
+                    dischargeFailed: "Discharge failed. Please check the form and try again.",
+                    
+                    areaTitle: "Assign Area to Patient",
+                    targetLabel: "Select Station Area",
+                    assignBtn: "Move to Station",
+                    
+                    notesTitle: "Update Clinical Details",
+                    notesStaffLabel: "Assigned Staff Name (Free Text)",
+                    notesNotesLabel: "Add/Edit Clinical Notes",
+                    notesSaveBtn: "Save Details",
                 },
                 footer: {
                     rights: "All rights reserved."
@@ -403,7 +500,7 @@
                 home: {
                     heading: "Willkommen beim SAMS Aufnahmesystem",
                     p1: "Diese Oberfläche dient der schnellen Patientenaufnahme und dem Triage-Management in der Notaufnahme. Bitte verwenden Sie den Reiter Patienteneingabe, um eintreffende Patienten sofort zu protokollieren.",
-                    p2: "Der Empfangs-Reiter zeigt alle ausstehenden Patienten an, die auf eine klinische Zuweisung warten. Der Stations-Reiter verfolgt aktive Patienten, und das Archiv enthält entlassene Aufzeichnungen. Diese Listen werden in Echtzeit aktualisiert.",
+                    p2: "Der Empfangs-Reiter zeigt alle ausstehenden Patienten an, die auf eine klinische Zuweisung warten. Der Stations-Reiter verfolgt aktive Patienten in ICU/Aufwachraum, und das Archiv enthält entlassene Aufzeichnungen. Diese Listen werden in Echtzeit aktualisiert.",
                 },
                 patientEntry: {
                     heading: "Notfall Patientenschnelleingabe",
@@ -424,7 +521,7 @@
                     heading: "Eintreffende Patienten (Warten auf Triage)",
                     loading: "Patienten werden geladen...",
                     empty: "Derzeit warten keine Patienten auf die Triage.",
-                    receiveBtn: "Auf Station Verschieben", 
+                    receiveBtn: "Bereich Zuweisen & Auf Station Verschieben", 
                     priority: "Priorität:",
                     complaint: "Beschwerde:",
                     time: "Zeit:",
@@ -433,16 +530,26 @@
                     paramedic: "Notarzt/Team:", 
                 },
                 station: {
-                    heading: "Aktive Patienten (Zugewiesene Station)",
+                    heading: "Aktive Patienten (ICU & Aufwachraum)",
+                    capacity: "Kapazität:",
+                    icu: {
+                        heading: "Intensivstation (ICU)",
+                        subtext: `Max ${CAPACITIES.icu} Räume`
+                    },
+                    recovery: {
+                        heading: "Aufwachraum",
+                        subtext: `Max ${CAPACITIES.recovery} Betten`
+                    },
                     loading: "Aktive Patienten werden geladen...",
-                    empty: "Derzeit ist kein Patient einer Station zugewiesen.",
+                    empty: "Derzeit ist kein Patient diesem Bereich zugewiesen.",
                     releaseBtn: "Patient Entlassen / Archiv",
+                    updateBtn: "Klinische Details Aktualisieren",
                     priority: "Priorität:",
                     complaint: "Beschwerde:",
                     time: "Zeit auf Station:",
                     submitter: "Triage/Zuweisung durch:",
-                    assigned: "Zugewiesen:",
-                    assignBtn: "Mitarbeiter Zuweisen",
+                    assignedStaff: "Zugewiesener Mitarbeiter:",
+                    notes: "Klinische Notizen:",
                     unassigned: "Nicht Zugewiesen",
                     vitals: "Vitalwerte:", 
                     paramedic: "Notarzt/Team:", 
@@ -472,12 +579,21 @@
                     submitBtn: "Nachricht senden",
                 },
                 modal: { 
-                    title: "Bestätigung der Patientenentlassung",
+                    dischargeTitle: "Bestätigung der Patientenentlassung",
                     staffLabel: "Mitarbeitername (Arzt/Krankenschwester)",
                     dateLabel: "Entlassungsdatum",
                     cancelBtn: "Abbrechen",
                     confirmBtn: "Bestätigen & Archivieren",
-                    dischargeFailed: "Entlassung fehlgeschlagen. Bitte überprüfen Sie das Formular und versuchen Sie es erneut."
+                    dischargeFailed: "Entlassung fehlgeschlagen. Bitte überprüfen Sie das Formular und versuchen Sie es erneut.",
+
+                    areaTitle: "Bereich zuweisen",
+                    targetLabel: "Stationsbereich auswählen",
+                    assignBtn: "Auf Station Verschieben",
+
+                    notesTitle: "Klinische Details Aktualisieren",
+                    notesStaffLabel: "Zugewiesener Mitarbeitername (Freitext)",
+                    notesNotesLabel: "Klinische Notizen Hinzufügen/Bearbeiten",
+                    notesSaveBtn: "Details Speichern",
                 },
                 footer: {
                     rights: "Alle Rechte vorbehalten."
@@ -500,9 +616,6 @@
             activeTab: (savedTab && tabs.includes(savedTab)) ? savedTab : 'home'
         };
         
-        // State for the modal
-        let modalPatientId = null;
-
         // Utility to format date to YYYY-MM-DD
         const getTodayDateString = () => {
             const today = new Date();
@@ -591,13 +704,28 @@
             getEl('contact-message-placeholder').placeholder = content.contact.messagePlaceholder;
             getEl('contact-submit-btn').textContent = content.contact.submitBtn;
 
-            // Modal Content
-            getEl('modal-title').innerHTML = `<span data-lucide="shield-check" class="w-6 h-6 mr-2 text-blue-600"></span> ${content.modal.title}`;
+            // Modal Content (Discharge)
+            getEl('modal-title').innerHTML = `<span data-lucide="shield-check" class="w-6 h-6 mr-2 text-blue-600"></span> ${content.modal.dischargeTitle}`;
             getEl('modal-staff-label').textContent = content.modal.staffLabel;
             getEl('modal-date-label').textContent = content.modal.dateLabel;
             getEl('modal-cancel-btn').textContent = content.modal.cancelBtn;
             getEl('modal-confirm-btn').textContent = content.modal.confirmBtn;
             getEl('discharge-date').value = getTodayDateString();
+
+            // Modal Content (Area Assignment)
+            getEl('area-modal-title').innerHTML = `<span data-lucide="link" class="w-6 h-6 mr-2 text-red-700"></span> ${content.modal.areaTitle}`;
+            getEl('area-modal-target-label').textContent = content.modal.targetLabel;
+            getEl('area-option-recovery').textContent = content.station.recovery.heading;
+            getEl('area-option-icu').textContent = content.station.icu.heading;
+            getEl('area-modal-cancel-btn').textContent = content.modal.cancelBtn;
+            getEl('area-modal-confirm-btn').textContent = content.modal.assignBtn;
+
+            // Modal Content (Staff & Notes)
+            getEl('staff-notes-modal-title').innerHTML = `<span data-lucide="clipboard-edit" class="w-6 h-6 mr-2 text-blue-800"></span> ${content.modal.notesTitle}`;
+            getEl('staff-notes-staff-label').textContent = content.modal.notesStaffLabel;
+            getEl('staff-notes-notes-label').textContent = content.modal.notesNotesLabel;
+            getEl('staff-notes-cancel-btn').textContent = content.modal.cancelBtn;
+            getEl('staff-notes-confirm-btn').textContent = content.modal.notesSaveBtn;
 
             // Footer Content
             getEl('footer-year').textContent = new Date().getFullYear();
@@ -750,8 +878,21 @@
                         createMockPatient('Michael Brown', 'medium', 'Deep laceration on forearm, uncontrolled bleeding.', 'Ambulance 7'),
                         createMockPatient('Sophia Lee', 'low', 'Sprained ankle from sports injury.', 'Self-Admitted'),
                     ];
-                    mockPatients[1].status = 'station'; // Michael is already in station
-                    mockPatients[1].assignedStaff = mockStaff[0];
+                    // Assign some mock patients directly to station areas
+                    mockPatients.push({
+                        ...createMockPatient('John Doe', 'medium', 'Fever, cough, and fatigue.', 'Paramedic 1'),
+                        status: 'station',
+                        area: 'recovery',
+                        stationTime: new Date(Date.now() - 600000),
+                        assignedStaff: 'Nurse Jane'
+                    });
+                    mockPatients.push({
+                        ...createMockPatient('Anna Green', 'high', 'Post-op observation.', 'OR Team'),
+                        status: 'station',
+                        area: 'icu',
+                        stationTime: new Date(Date.now() - 1200000),
+                        assignedStaff: 'Dr. Smith'
+                    });
                 }
                 processPatientData(mockPatients);
                 return;
@@ -796,11 +937,15 @@
                 return new Date(a.entryTime).getTime() - new Date(b.entryTime).getTime();
             });
 
-            // Filter into lists based on status
+            // Filter into lists based on status and area
             receivingPatients = patients.filter(p => p.status === 'receiving');
-            stationPatients = patients.filter(p => p.status === 'station');
+            recoveryPatients = patients.filter(p => p.status === 'station' && p.area === 'recovery');
+            icuPatients = patients.filter(p => p.status === 'station' && p.area === 'icu');
             archivedPatients = patients.filter(p => p.status === 'archived');
-
+            
+            // Re-combine station patients for general data consistency if needed, but not used directly
+            // stationPatients = recoveryPatients.concat(icuPatients); 
+            
             render();
         }
 
@@ -812,6 +957,8 @@
             const record = {
                 ...patientData,
                 status: 'receiving', // Initial status
+                area: null,         // New field: Initial area is null
+                notes: '',          // New field: Initial notes are empty
                 entryTime: useMockDb ? new Date() : serverTimestamp(),
                 submittedBy: userId,
             };
@@ -915,6 +1062,8 @@
                 paramedic: paramedic,
                 priority: priority,
                 status: 'receiving',
+                area: null,
+                notes: '',
                 entryTime: new Date(Date.now() - Math.floor(Math.random() * 3600000)), // up to 1 hour ago
                 submittedBy: 'System',
             };
@@ -937,22 +1086,30 @@
             const timeField = isArchive ? langContent.time.replace('Archived:', '').trim() : langContent.time.replace(/Time at Station:|Time:/, '').trim();
             const timeValue = isArchive ? (patient.dischargeTime ? new Date(patient.dischargeTime).toLocaleString() : 'N/A') : formatTimeSince(isStation ? patient.stationTime : patient.entryTime);
             
-            const staffAssignmentHtml = isStation ? `
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                    <div class="text-sm font-semibold text-gray-700 mr-4">
-                        ${langContent.assigned}
-                        <span class="font-normal text-blue-600">${patient.assignedStaff?.name || langContent.unassigned}</span>
+            const staffNotesHtml = isStation ? `
+                <div class="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                    <div class="text-sm font-semibold text-gray-700">
+                        ${langContent.assignedStaff}
+                        <span class="font-normal text-blue-600">${patient.assignedStaff || langContent.unassigned}</span>
                     </div>
-                    <button onclick="window.handleAssignStaff('${patient.id}', '${patient.name}')" class="mt-2 sm:mt-0 text-xs font-medium px-3 py-1 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition duration-200">${langContent.assignBtn}</button>
+                    <p class="text-sm text-gray-500">
+                        <span class="font-semibold text-gray-700">${langContent.notes}</span> ${patient.notes || 'No notes added.'}
+                    </p>
+                </div>
+                <div class="flex justify-end mt-4">
+                    <button onclick="window.openStaffNotesModal('${patient.id}', '${patient.name}', '${patient.assignedStaff || ''}', '${patient.notes || ''}')" class="text-xs font-medium px-3 py-1 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition duration-200 flex items-center">
+                        <span data-lucide="clipboard-edit" class="w-4 h-4 mr-1"></span> ${langContent.updateBtn}
+                    </button>
                 </div>
             ` : '';
 
+
             const actionButtonHtml = isReceiving ? `
-                <button onclick="window.handleMoveToStation('${patient.id}')" class="w-full sm:w-auto bg-red-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-700 transition duration-200 flex items-center justify-center shadow-md">
+                <button onclick="window.openAreaAssignmentModal('${patient.id}', '${patient.name}')" class="w-full sm:w-auto bg-red-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-700 transition duration-200 flex items-center justify-center shadow-md">
                     <span data-lucide="chevrons-right" class="w-5 h-5 mr-2"></span> ${langContent.receiveBtn}
                 </button>
             ` : isStation ? `
-                <button onclick="window.openModal('${patient.id}', '${patient.name}')" class="w-full sm:w-auto bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-200 flex items-center justify-center shadow-md">
+                <button onclick="window.openDischargeModal('${patient.id}', '${patient.name}')" class="w-full sm:w-auto bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-200 flex items-center justify-center shadow-md">
                     <span data-lucide="archive" class="w-5 h-5 mr-2"></span> ${langContent.releaseBtn}
                 </button>
             ` : '';
@@ -962,6 +1119,7 @@
                     <div><span class="font-medium">${langContent.dischargedBy}</span> ${patient.dischargedBy || 'N/A'}</div>
                     <div><span class="font-medium">${langContent.dischargeDate}</span> ${patient.dischargeDate || 'N/A'}</div>
                 </div>
+                ${patient.notes ? `<p class="text-sm text-gray-500 mt-2"><span class="font-semibold text-gray-700">${langContent.notes}</span> ${patient.notes}</p>` : ''}
             ` : '';
 
             return `
@@ -989,13 +1147,11 @@
                         </div>
                     </div>
                     
-                    ${staffAssignmentHtml}
+                    ${staffNotesHtml}
                     ${archiveDetailsHtml}
                     
-                    <!-- Action Button -->
-                    <div class="mt-4 flex justify-end">
-                        ${actionButtonHtml}
-                    </div>
+                    <!-- Action Button (only for receiving and archive) -->
+                    ${!isStation ? `<div class="mt-4 flex justify-end">${actionButtonHtml}</div>` : ''}
                 </div>
             `;
         }
@@ -1008,6 +1164,7 @@
 
             const lang = currentState.language;
             const content = dictionary[lang];
+            const stationContent = content.station;
 
             // --- Receiving List ---
             getEl('receiving-heading').innerHTML = `<span data-lucide="clipboard-list" class="w-6 h-6 mr-2 text-red-600"></span> ${content.receiving.heading}`;
@@ -1018,13 +1175,48 @@
                 receivingContainer.innerHTML = receivingPatients.map(p => renderPatientCard(p, content.receiving)).join('');
             }
 
-            // --- Station List ---
-            getEl('station-heading').innerHTML = `<span data-lucide="hospital" class="w-6 h-6 mr-2 text-blue-600"></span> ${content.station.heading}`;
-            const stationContainer = getEl('station-list-container');
-            if (stationPatients.length === 0) {
-                stationContainer.innerHTML = `<p class="text-center text-gray-500 p-8 border border-dashed rounded-lg">${content.station.empty}</p>`;
+            // --- Station List (ICU & Recovery) ---
+            getEl('station-heading').innerHTML = `<span data-lucide="hospital" class="w-6 h-6 mr-2 text-blue-600"></span> ${stationContent.heading}`;
+            
+            // Render Capacity Display
+            const recoveryCount = recoveryPatients.length;
+            const icuCount = icuPatients.length;
+            
+            getEl('capacity-display').innerHTML = `
+                <div class="p-4 rounded-xl shadow-lg border-l-4 ${recoveryCount >= CAPACITIES.recovery ? 'border-red-500 bg-red-50' : 'border-green-500 bg-green-50'}">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-lg font-bold ${recoveryCount >= CAPACITIES.recovery ? 'text-red-700' : 'text-green-700'}">${stationContent.recovery.heading}</h4>
+                        <span class="text-sm font-medium text-gray-500">${stationContent.recovery.subtext}</span>
+                    </div>
+                    <div class="text-4xl font-extrabold mt-2 ${recoveryCount >= CAPACITIES.recovery ? 'text-red-600' : 'text-green-600'}">${recoveryCount} / ${CAPACITIES.recovery}</div>
+                    <p class="text-xs mt-1 ${recoveryCount >= CAPACITIES.recovery ? 'text-red-500' : 'text-green-500'}">${recoveryCount >= CAPACITIES.recovery ? 'Capacity Reached!' : 'Available'}</p>
+                </div>
+                <div class="p-4 rounded-xl shadow-lg border-l-4 ${icuCount >= CAPACITIES.icu ? 'border-red-500 bg-red-50' : 'border-blue-500 bg-blue-50'}">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-lg font-bold ${icuCount >= CAPACITIES.icu ? 'text-red-700' : 'text-blue-700'}">${stationContent.icu.heading}</h4>
+                        <span class="text-sm font-medium text-gray-500">${stationContent.icu.subtext}</span>
+                    </div>
+                    <div class="text-4xl font-extrabold mt-2 ${icuCount >= CAPACITIES.icu ? 'text-red-600' : 'text-blue-600'}">${icuCount} / ${CAPACITIES.icu}</div>
+                    <p class="text-xs mt-1 ${icuCount >= CAPACITIES.icu ? 'text-red-500' : 'text-blue-500'}">${icuCount >= CAPACITIES.icu ? 'Capacity Reached!' : 'Available'}</p>
+                </div>
+            `;
+            
+            // Render Recovery List
+            getEl('recovery-heading').innerHTML = `<span data-lucide="bed" class="w-5 h-5 mr-2"></span> ${stationContent.recovery.heading}`;
+            const recoveryContainer = getEl('recovery-list-container');
+            if (recoveryPatients.length === 0) {
+                recoveryContainer.innerHTML = `<p class="text-center text-gray-500 p-8 border border-dashed rounded-lg">${stationContent.empty}</p>`;
             } else {
-                stationContainer.innerHTML = stationPatients.map(p => renderPatientCard(p, content.station)).join('');
+                recoveryContainer.innerHTML = recoveryPatients.map(p => renderPatientCard(p, stationContent)).join('');
+            }
+            
+            // Render ICU List
+            getEl('icu-heading').innerHTML = `<span data-lucide="heart-pulse" class="w-5 h-5 mr-2"></span> ${stationContent.icu.heading}`;
+            const icuContainer = getEl('icu-list-container');
+            if (icuPatients.length === 0) {
+                icuContainer.innerHTML = `<p class="text-center text-gray-500 p-8 border border-dashed rounded-lg">${stationContent.empty}</p>`;
+            } else {
+                icuContainer.innerHTML = icuPatients.map(p => renderPatientCard(p, stationContent)).join('');
             }
 
             // --- Archive List ---
@@ -1086,76 +1278,43 @@
             submitBtn.textContent = langContent.submitBtn;
         }
 
-        /**
-         * Moves a patient from 'receiving' status to 'station' status.
-         * @param {string} id - Patient ID.
-         */
-        window.handleMoveToStation = async (id) => {
-            const fields = {
-                status: 'station',
-                stationTime: useMockDb ? new Date() : serverTimestamp(),
-                assignedBy: userId,
-                assignedStaff: null, // Clear staff assignment upon entry to station
-            };
-            await updatePatientStatus(id, fields);
-            window.switchTab('station');
-        };
-
-        /**
-         * Opens the staff assignment modal and populates staff options.
-         * NOTE: Since we only have mock staff data, this is just for demo purposes.
-         * @param {string} id - Patient ID.
-         * @param {string} name - Patient Name.
-         */
-        window.handleAssignStaff = async (id, name) => {
-            // Find the patient's current record
-            const patient = allPatients.find(p => p.id === id);
-            
-            // Random assignment for demo
-            const selectedStaff = mockStaff[Math.floor(Math.random() * mockStaff.length)]; 
-
-            // Prevent assigning the same staff twice in a row (for better demo cycling)
-            if (patient && patient.assignedStaff && patient.assignedStaff.id === selectedStaff.id) {
-                const nextStaff = mockStaff.find(s => s.id !== selectedStaff.id) || mockStaff[0];
-                await updatePatientStatus(id, { assignedStaff: nextStaff });
-                return;
-            }
-
-            const fields = { assignedStaff: selectedStaff };
-            await updatePatientStatus(id, fields);
-        };
-
         // --- Modal Logic ---
+        
+        /**
+         * Generic function to open a modal.
+         * @param {string} modalId - The ID of the modal div.
+         */
+        function openModal(modalId) {
+            const modal = getEl(modalId);
+            modal.classList.remove('hidden', 'opacity-0');
+            modal.classList.add('opacity-100');
+        }
+
+        /**
+         * Generic function to close a modal.
+         * @param {string} modalId - The ID of the modal div.
+         */
+        window.closeModal = (modalId) => {
+            const modal = getEl(modalId);
+            modal.classList.remove('opacity-100');
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300); // Wait for transition
+        };
 
         /**
          * Opens the discharge modal.
-         * @param {string} id - Patient ID to discharge.
-         * @param {string} name - Patient name for display.
          */
-        window.openModal = (id, name) => {
-            modalPatientId = id;
-            const modal = getEl('discharge-modal');
+        window.openDischargeModal = (id, name) => {
+            dischargeModalPatientId = id;
             const langContent = dictionary[currentState.language].modal;
 
             getEl('modal-patient-name').textContent = `${langContent.confirmBtn.split(' ')[0]} ${name}?`;
             getEl('discharge-date').value = getTodayDateString(); // Set today's date
             getEl('discharge-staff-name').value = ''; // Clear staff name
-
-            modal.classList.remove('hidden', 'opacity-0');
-            modal.classList.add('opacity-100');
-        };
-
-        /**
-         * Closes the discharge modal.
-         */
-        window.closeModal = () => {
-            const modal = getEl('discharge-modal');
-            modal.classList.remove('opacity-100');
-            modal.classList.add('opacity-0');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                modalPatientId = null;
-            }, 300); // Wait for transition
+            
+            openModal('discharge-modal');
         };
 
         /**
@@ -1164,7 +1323,7 @@
         async function handleDischargeSubmit(event) {
             event.preventDefault();
             
-            if (!modalPatientId) return;
+            if (!dischargeModalPatientId) return;
 
             const staffName = getEl('discharge-staff-name').value.trim();
             const dischargeDate = getEl('discharge-date').value;
@@ -1173,7 +1332,7 @@
             confirmBtn.disabled = true;
             confirmBtn.textContent = 'Processing...';
 
-            const success = await updatePatientStatus(modalPatientId, {
+            const success = await updatePatientStatus(dischargeModalPatientId, {
                 status: 'archived',
                 dischargeTime: useMockDb ? new Date() : serverTimestamp(),
                 dischargedBy: staffName,
@@ -1181,18 +1340,128 @@
             });
 
             if (success) {
-                window.closeModal();
+                window.closeModal('discharge-modal');
                 window.switchTab('archive');
             } else {
-                // Since alert() is disallowed, we'll log an error and keep the modal open
-                console.error("Discharge attempt failed. Displaying error to user not supported by alert().");
-                // For demonstration: show custom error message if alert was allowed
-                // alert(dictionary[currentState.language].modal.dischargeFailed); 
+                console.error("Discharge attempt failed.");
             }
             
             confirmBtn.disabled = false;
             confirmBtn.textContent = originalText;
+            dischargeModalPatientId = null;
         }
+
+        /**
+         * Opens the Area Assignment Modal.
+         * @param {string} id - Patient ID.
+         * @param {string} name - Patient Name.
+         */
+        window.openAreaAssignmentModal = (id, name) => {
+            areaModalPatientId = id;
+            const langContent = dictionary[currentState.language].modal;
+            
+            getEl('area-modal-patient-name').textContent = `${langContent.assignBtn.split(' ')[0]} ${name}:`;
+            getEl('target-area').value = 'recovery'; // Default selection
+
+            openModal('area-assignment-modal');
+        };
+
+        /**
+         * Handles the submission of the Area Assignment Modal.
+         */
+        async function handleAreaAssignmentSubmit(event) {
+            event.preventDefault();
+            if (!areaModalPatientId) return;
+
+            const targetArea = getEl('target-area').value;
+            const confirmBtn = getEl('area-modal-confirm-btn');
+            const originalText = confirmBtn.textContent;
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Moving...';
+
+            // Check capacity before moving
+            const currentCount = targetArea === 'icu' ? icuPatients.length : recoveryPatients.length;
+            const maxCapacity = CAPACITIES[targetArea];
+
+            if (currentCount >= maxCapacity) {
+                alert(`Cannot move patient: ${targetArea.toUpperCase()} capacity is full (${maxCapacity} / ${maxCapacity}).`);
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = originalText;
+                return;
+            }
+
+            const success = await updatePatientStatus(areaModalPatientId, {
+                status: 'station',
+                area: targetArea,
+                stationTime: useMockDb ? new Date() : serverTimestamp(),
+                assignedBy: userId,
+                assignedStaff: 'Unassigned',
+                notes: '',
+            });
+
+            if (success) {
+                window.closeModal('area-assignment-modal');
+                window.switchTab('station');
+            } else {
+                console.error("Area assignment failed.");
+            }
+
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = originalText;
+            areaModalPatientId = null;
+        }
+
+        /**
+         * Opens the Staff & Notes Modal.
+         * @param {string} id - Patient ID.
+         * @param {string} name - Patient Name.
+         * @param {string} currentStaff - Current staff name (or 'Unassigned').
+         * @param {string} currentNotes - Current clinical notes.
+         */
+        window.openStaffNotesModal = (id, name, currentStaff, currentNotes) => {
+            staffNotesModalPatientId = id;
+            const langContent = dictionary[currentState.language].modal;
+
+            getEl('staff-notes-modal-patient-name').textContent = `${langContent.notesTitle.split(' ')[0]} ${name}:`;
+            
+            // Populate fields
+            getEl('update-staff-name').value = currentStaff === 'Unassigned' ? '' : currentStaff;
+            getEl('update-notes').value = currentNotes;
+            
+            openModal('staff-notes-modal');
+        };
+        
+        /**
+         * Handles the submission of the Staff & Notes Modal.
+         */
+        async function handleStaffNotesSubmit(event) {
+            event.preventDefault();
+            if (!staffNotesModalPatientId) return;
+
+            const staffName = getEl('update-staff-name').value.trim() || 'Unassigned';
+            const clinicalNotes = getEl('update-notes').value.trim();
+            const confirmBtn = getEl('staff-notes-confirm-btn');
+            const originalText = confirmBtn.textContent;
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Saving...';
+
+            const success = await updatePatientStatus(staffNotesModalPatientId, {
+                assignedStaff: staffName,
+                notes: clinicalNotes,
+            });
+
+            if (success) {
+                window.closeModal('staff-notes-modal');
+                render(); // Force re-render just to be sure, although onSnapshot should handle it
+            } else {
+                console.error("Staff/Notes update failed.");
+            }
+
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = originalText;
+            staffNotesModalPatientId = null;
+        }
+
 
         // --- Initialization and Event Wiring ---
 
@@ -1205,6 +1474,8 @@
             getEl('language-toggle').addEventListener('click', window.toggleLanguage);
             getEl('patient-entry-form').addEventListener('submit', handlePatientEntrySubmit);
             getEl('discharge-form').addEventListener('submit', handleDischargeSubmit);
+            getEl('area-assignment-form').addEventListener('submit', handleAreaAssignmentSubmit);
+            getEl('staff-notes-form').addEventListener('submit', handleStaffNotesSubmit);
             
             // Prevent contact form submission
             const contactForm = getEl('tab-contact').querySelector('form');
