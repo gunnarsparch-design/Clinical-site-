@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAMS | Emergency Patient Flow</title>
+    <title>SAMS Emergency Patient Flow</title>
     <!-- Add a favicon link to resolve the 404 error in the console -->
     <link rel="icon" href="https://placehold.co/32x32/3b82f6/ffffff?text=S" type="image/png"> 
     
     <!-- Load Firebase/Tailwind/Icons -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- NOTE: The console warns that cdn.tailwindcss.com should not be used in production. -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         /* Custom font import for a professional look */
@@ -210,34 +209,13 @@
                 </div>
             </div>
 
-            <!-- Contact / Kontakt Content -->
-            <div id="tab-contact" class="tab-content hidden bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-gray-600">
-                <h2 id="contact-heading" class="text-2xl font-semibold text-gray-900 mb-4 flex items-center">
-                    <span data-lucide="mail" class="w-6 h-6 mr-2 text-gray-600"></span>
+            <!-- Procedures / Prozeduren Content -->
+            <div id="tab-procedures" class="tab-content hidden bg-white p-6 sm:p-10 rounded-xl shadow-lg border-t-4 border-gray-600">
+                <h2 id="procedures-heading" class="text-2xl font-semibold text-gray-900 mb-4 flex items-center">
+                    <span data-lucide="compass" class="w-6 h-6 mr-2 text-gray-600"></span>
                 </h2>
-                <div class="grid md:grid-cols-2 gap-6">
-                    <div>
-                        <h3 id="contact-address-title" class="font-bold text-lg text-gray-700 mb-2"></h3>
-                        <p class="text-gray-600">
-                            San Andres Medical Service (SAMS)<br>
-                            123 Health Ave, San Andres City<br>
-                            CA 90210, Country<br>
-                        </p>
-                    </div>
-                    <div>
-                        <h3 id="contact-details-title" class="font-bold text-lg text-gray-700 mb-2"></h3>
-                        <p id="contact-phone" class="text-gray-600 mb-1">Phone: +1 555-SAMS-HELP</p>
-                        <p id="contact-email" class="text-gray-600">Email: info@sams.com</p>
-                    </div>
-                </div>
-                <div class="mt-8">
-                    <h3 id="contact-form-title" class="font-bold text-lg text-gray-700 mb-4"></h3>
-                    <form>
-                        <input id="contact-name-placeholder" type="text" placeholder="" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
-                        <input id="contact-email-placeholder" type="email" placeholder="" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
-                        <textarea id="contact-message-placeholder" rows="4" placeholder="" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></textarea>
-                        <button id="contact-submit-btn" type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md"></button>
-                    </form>
+                <div id="procedures-content" class="text-base text-gray-700 leading-relaxed">
+                    <!-- Content injected by JS -->
                 </div>
             </div>
 
@@ -262,7 +240,7 @@
             <form id="discharge-form" class="space-y-4">
                 <div>
                     <label for="discharge-staff-name" id="modal-staff-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                    <input type="text" id="discharge-staff-name" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Dr. John Doe">
+                    <input type="text" id="discharge-staff-name" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="z.B. Dr. John Doe">
                 </div>
                 <div>
                     <label for="discharge-date" id="modal-date-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
@@ -313,11 +291,11 @@
             <form id="staff-notes-form" class="space-y-4">
                 <div>
                     <label for="update-staff-name" id="staff-notes-staff-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                    <input type="text" id="update-staff-name" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Dr. Jane Smith">
+                    <input type="text" id="update-staff-name" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="z.B. Dr. Jane Smith">
                 </div>
                 <div>
                     <label for="update-notes" id="staff-notes-notes-label" class="block text-sm font-medium text-gray-700 mb-1"></label>
-                    <textarea id="update-notes" rows="4" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Add clinical notes, medication, or status updates..."></textarea>
+                    <textarea id="update-notes" rows="4" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Klinische Notizen, Medikamente oder Status-Updates hinzufügen..."></textarea>
                 </div>
                 <div class="flex justify-end space-x-3 pt-4">
                     <button type="button" onclick="window.closeModal('staff-notes-modal')" id="staff-notes-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition duration-200"></button>
@@ -333,7 +311,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, addDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Set Firebase Log Level to Debug
         setLogLevel('Debug');
@@ -361,7 +339,6 @@
         let icuPatients = [];
         let recoveryPatients = [];
         let archivedPatients = [];
-        let mockPatients = []; // Mock database for when Firebase is unavailable
 
         // State for the modals
         let dischargeModalPatientId = null;
@@ -381,7 +358,7 @@
                     receiving: "Receiving",
                     station: "Station View",
                     archive: "Archive",
-                    contact: "Contact"
+                    procedures: "Procedures" // Updated from contact
                 },
                 home: {
                     heading: "Welcome to SAMS Intake System",
@@ -454,15 +431,27 @@
                     vitals: "Vitalwerte:", 
                     paramedic: "Notarzt/Team:", 
                 },
-                contact: {
-                    heading: "Contact Us",
-                    addressTitle: "Our Location",
-                    detailsTitle: "General Inquiries",
-                    formTitle: "Send a Message",
-                    namePlaceholder: "Your Name",
-                    emailPlaceholder: "Your Email",
-                    messagePlaceholder: "Your Message",
-                    submitBtn: "Send Message",
+                procedures: {
+                    heading: "Clinical Decision Procedure (ED)",
+                    loading: "Loading procedure details...",
+                    text: `
+                        <h3 class="text-xl font-bold text-gray-800 mb-3">Decision Procedure from Emergency Department (ED)</h3>
+                        <p class="mb-4 text-gray-700">The following procedure, defined by SAMS, dictates patient flow based on initial triage and severity:</p>
+                        <div class="space-y-6">
+                            <h4 class="text-lg font-semibold text-blue-700">1. Initial Assessment (Triage)</h4>
+                            <p class="text-gray-600 mb-2">Initial vital signs, main complaint, and reaction to first aid. The physician (Level 4 or higher) classifies the patient:</p>
+                            <ul class="list-disc list-inside ml-4 text-gray-600">
+                                <li>Minimal (Minimal)</li>
+                                <li>Medium (Mittel)</li>
+                                <li>Critical (Kritisch)</li>
+                            </ul>
+                            <h4 class="text-lg font-semibold text-blue-700">2. Assignment Based on Severity (German Detail Follows)</h4>
+                            <div class="bg-gray-50 p-4 rounded-lg border-l-4 border-blue-500">
+                                <p class="font-bold text-gray-800 mb-2">The detailed procedural documentation is provided in the original German text, as it is the official hospital standard.</p>
+                                <p class="text-sm text-gray-600">Please refer to the German version for specific bed allocation and treatment pathways for Minimal, Mittel, and Kritisch cases.</p>
+                            </div>
+                        </div>
+                    `, 
                 },
                 modal: { 
                     dischargeTitle: "Confirm Patient Discharge",
@@ -495,7 +484,7 @@
                     receiving: "Empfang",
                     station: "Stationsansicht",
                     archive: "Archiv",
-                    contact: "Kontakt"
+                    procedures: "Prozeduren" // Updated from contact
                 },
                 home: {
                     heading: "Willkommen beim SAMS Aufnahmesystem",
@@ -568,15 +557,78 @@
                     vitals: "Vitalwerte:", 
                     paramedic: "Notarzt/Team:", 
                 },
-                contact: {
-                    heading: "Kontaktieren Sie uns",
-                    addressTitle: "Unser Standort",
-                    detailsTitle: "Allgemeine Anfragen",
-                    formTitle: "Nachricht senden",
-                    namePlaceholder: "Ihr Name",
-                    emailPlaceholder: "Ihre E-Mail",
-                    messagePlaceholder: "Ihre Nachricht",
-                    submitBtn: "Nachricht senden",
+                procedures: {
+                    heading: "Klinische Entscheidungsprozedur",
+                    loading: "Prozedurdetails werden geladen...",
+                    text: `
+                        <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center"><span data-lucide="hospital" class="w-5 h-5 mr-2"></span> Entscheidungsprozedur ab Notaufnahme (ED)</h3>
+
+                        <div class="space-y-6">
+                            
+                            <!-- 1. Erste Einschätzung -->
+                            <div>
+                                <h4 class="text-lg font-semibold text-blue-700 mb-2">1. Ersteinschätzung (Triage in der ED)</h4>
+                                <p class="text-gray-600 mb-2">Vitalwerte (Atemfrequenz, Kreislauf, Bewusstsein, O₂-Sättigung), Hauptbeschwerde / Verletzung, Reaktion auf Erste-Hilfe-Maßnahmen.</p>
+                                <p class="font-semibold text-gray-700">→ Arzt (Stufe 4 oder höher) klassifiziert:</p>
+                                <ul class="list-disc list-inside ml-4 text-gray-600">
+                                    <li>Minimal</li>
+                                    <li>Mittel</li>
+                                    <li>Kritisch</li>
+                                </ul>
+                            </div>
+
+                            <!-- 2. Zuweisung -->
+                            <div>
+                                <h4 class="text-lg font-semibold text-blue-700 mb-3">2. Zuweisung je nach Schweregrad</h4>
+                                
+                                <div class="bg-green-50 p-4 rounded-lg border-l-4 border-green-500 mb-4">
+                                    <h5 class="font-bold text-green-700 mb-2">🔹 Minimal</h5>
+                                    <p class="text-sm text-gray-700">Zustand: stabile Vitalwerte, keine akute Lebensgefahr, benötigt nur Beobachtung oder Kurzzeitüberwachung.</p>
+                                    <p class="text-sm font-semibold text-gray-800 mt-1">Ort: Recovery Area (Aufwachraum, 6 Betten)</p>
+                                    <p class="text-sm text-gray-700 mt-1">Maßnahmen: Basismonitoring (Vitalwerte, evtl. Infusion), Kurzzeit-Überwachung (meist &lt; 24h).</p>
+                                    <p class="text-xs text-gray-500 mt-1">Weiter: Entlassung nach Hause oder Verlegung auf Normalstation.</p>
+                                </div>
+                                
+                                <div class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-500 mb-4">
+                                    <h5 class="font-bold text-yellow-700 mb-2">🔹 Mittel</h5>
+                                    <p class="text-sm text-gray-700">Zustand: instabil, aber nicht unmittelbar lebensbedrohlich; z. B. Sepsis, Herzrhythmusstörung, Komplikationen nach OP.</p>
+                                    <p class="text-sm font-semibold text-gray-800 mt-1">Ort: Wenn kurzfristige Überwachung ausreichend: Recovery Area. Wenn absehbar längere/komplexere Therapie nötig: Intensivstation (ICU).</p>
+                                    <p class="text-sm text-gray-700 mt-1">Maßnahmen: Strukturierte Untersuchung: Blut, Röntgen, EKG. i.v. Medikamente, engmaschige Überwachung.</p>
+                                    <p class="text-xs text-gray-500 mt-1">Weiter: Transfer nach Stabilisierung: Normalstation / Überwachungsstation. Bei Verschlechterung: sofort in ICU.</p>
+                                </div>
+
+                                <div class="bg-red-50 p-4 rounded-lg border-l-4 border-red-500">
+                                    <h5 class="font-bold text-red-700 mb-2">🔹 Kritisch</h5>
+                                    <p class="text-sm text-gray-700">Zustand: akute Lebensgefahr (Schock, Atemstillstand, laufende CPR, schwere Traumata).</p>
+                                    <p class="text-sm font-semibold text-gray-800 mt-1">Ort: Direkt in ICU (4 Einzelzimmer mit Check-in). Falls ICU belegt → Schockversorgung im Recovery Area bis Transfer möglich.</p>
+                                    <p class="text-sm text-gray-700 mt-1">Maßnahmen: Sofortige ABC-Kontrolle, Intubation, Beatmung, Notfallmedikation, CT / Not-OP bei Bedarf.</p>
+                                    <p class="text-xs text-gray-500 mt-1">Weiter: ICU-Langzeittherapie, OP oder Intensiv-Überwachung.</p>
+                                </div>
+                            </div>
+
+                            <!-- 3. Entscheidungskette -->
+                            <div>
+                                <h4 class="text-lg font-semibold text-blue-700 mb-3">3. Entscheidungskette im Krankenhaus</h4>
+                                <div class="text-sm text-gray-700 space-y-1">
+                                    <p><span class="font-medium">Medical Assistant (Stufe 2):</span> Erste Vitalzeichen, Vorbereitung</p>
+                                    <p><span class="font-medium">Arzt (Stufe 4):</span> Triage-Entscheidung Minimal/Mittel/Kritisch</p>
+                                    <p><span class="font-medium">Supervisor (Stufe 6):</span> Aufnahme-/Verlegungsentscheidung Recovery ↔ ICU</p>
+                                    <p><span class="font-medium">Clinical Lead (Stufe 10):</span> Freigabe kritischer Therapien, Spezialinterventionen</p>
+                                    <p><span class="font-medium">Medical Director (Stufe 12):</span> Endgültige Verantwortung bei lebensbedrohlichen Ausnahmefällen</p>
+                                </div>
+                            </div>
+
+                            <!-- Kurz gesagt -->
+                            <div class="mt-4 pt-4 border-t border-gray-200">
+                                <p class="font-bold text-gray-800">📌 Kurz gesagt:</p>
+                                <ul class="list-disc list-inside ml-4 text-gray-600">
+                                    <li>Minimal → Recovery</li>
+                                    <li>Mittel → Recovery oder ICU (abhängig von Instabilität)</li>
+                                    <li>Kritisch → direkt ICU, Ausnahme: Recovery als Zwischenstation wenn kein Bett frei</li>
+                                </ul>
+                            </div>
+                        </div>
+                    `,
                 },
                 modal: { 
                     dischargeTitle: "Bestätigung der Patientenentlassung",
@@ -603,7 +655,7 @@
 
         // --- Core Application State & Logic ---
         
-        const tabs = ['home', 'patientEntry', 'receiving', 'station', 'archive', 'contact'];
+        const tabs = ['home', 'patientEntry', 'receiving', 'station', 'archive', 'procedures'];
         
         // Load initial state from localStorage or use defaults
         const savedLang = localStorage.getItem('samsAppLanguage');
@@ -611,7 +663,7 @@
 
         let currentState = {
             // Load language, default to 'en' if not found or invalid
-            language: (savedLang && dictionary[savedLang]) ? savedLang : 'en', 
+            language: (savedLang && dictionary[savedLang]) ? savedLang : 'de', // Default to German now
             // Load active tab, default to 'home' if not found or invalid
             activeTab: (savedTab && tabs.includes(savedTab)) ? savedTab : 'home'
         };
@@ -694,15 +746,10 @@
             // Receiving, Station, Archive Content
             renderPatientLists();
             
-            // Contact Content
-            getEl('contact-heading').innerHTML = `<span data-lucide="mail" class="w-6 h-6 mr-2 text-gray-600"></span> ${content.contact.heading}`;
-            getEl('contact-address-title').textContent = content.contact.addressTitle;
-            getEl('contact-details-title').textContent = content.contact.detailsTitle;
-            getEl('contact-form-title').textContent = content.contact.formTitle;
-            getEl('contact-name-placeholder').placeholder = content.contact.namePlaceholder;
-            getEl('contact-email-placeholder').placeholder = content.contact.emailPlaceholder;
-            getEl('contact-message-placeholder').placeholder = content.contact.messagePlaceholder;
-            getEl('contact-submit-btn').textContent = content.contact.submitBtn;
+            // Procedures Content
+            getEl('procedures-heading').innerHTML = `<span data-lucide="compass" class="w-6 h-6 mr-2 text-gray-600"></span> ${content.procedures.heading}`;
+            getEl('procedures-content').innerHTML = content.procedures.text;
+
 
             // Modal Content (Discharge)
             getEl('modal-title').innerHTML = `<span data-lucide="shield-check" class="w-6 h-6 mr-2 text-blue-600"></span> ${content.modal.dischargeTitle}`;
@@ -871,30 +918,8 @@
             if (!isAuthReady) return;
 
             if (useMockDb) {
-                // Initialize with mock data if needed (for demonstration)
-                if (mockPatients.length === 0) {
-                    mockPatients = [
-                        createMockPatient('Emily Johnson', 'high', 'Severe chest pain and shortness of breath.', 'EMT Alpha'),
-                        createMockPatient('Michael Brown', 'medium', 'Deep laceration on forearm, uncontrolled bleeding.', 'Ambulance 7'),
-                        createMockPatient('Sophia Lee', 'low', 'Sprained ankle from sports injury.', 'Self-Admitted'),
-                    ];
-                    // Assign some mock patients directly to station areas
-                    mockPatients.push({
-                        ...createMockPatient('John Doe', 'medium', 'Fever, cough, and fatigue.', 'Paramedic 1'),
-                        status: 'station',
-                        area: 'recovery',
-                        stationTime: new Date(Date.now() - 600000),
-                        assignedStaff: 'Nurse Jane'
-                    });
-                    mockPatients.push({
-                        ...createMockPatient('Anna Green', 'high', 'Post-op observation.', 'OR Team'),
-                        status: 'station',
-                        area: 'icu',
-                        stationTime: new Date(Date.now() - 1200000),
-                        assignedStaff: 'Dr. Smith'
-                    });
-                }
-                processPatientData(mockPatients);
+                // Mock data is no longer initialized here, it remains blank (allPatients = [])
+                processPatientData(allPatients); 
                 return;
             }
 
@@ -943,9 +968,6 @@
             icuPatients = patients.filter(p => p.status === 'station' && p.area === 'icu');
             archivedPatients = patients.filter(p => p.status === 'archived');
             
-            // Re-combine station patients for general data consistency if needed, but not used directly
-            // stationPatients = recoveryPatients.concat(icuPatients); 
-            
             render();
         }
 
@@ -959,6 +981,7 @@
                 status: 'receiving', // Initial status
                 area: null,         // New field: Initial area is null
                 notes: '',          // New field: Initial notes are empty
+                assignedStaff: '',  // New field: Initial assigned staff
                 entryTime: useMockDb ? new Date() : serverTimestamp(),
                 submittedBy: userId,
             };
@@ -966,8 +989,8 @@
             try {
                 if (useMockDb) {
                     record.id = crypto.randomUUID(); // Add mock ID
-                    mockPatients.push(record);
-                    processPatientData(mockPatients); // Manually trigger update
+                    allPatients.push(record);
+                    processPatientData(allPatients); // Manually trigger update
                 } else {
                     const patientsRef = collection(db, `artifacts/${appId}/public/data/patients`);
                     await retryWithBackoff(() => addDoc(patientsRef, record));
@@ -987,10 +1010,10 @@
         async function updatePatientStatus(patientId, fieldsToUpdate) {
             try {
                 if (useMockDb) {
-                    const index = mockPatients.findIndex(p => p.id === patientId);
+                    const index = allPatients.findIndex(p => p.id === patientId);
                     if (index !== -1) {
-                        mockPatients[index] = { ...mockPatients[index], ...fieldsToUpdate };
-                        processPatientData(mockPatients); // Manually trigger update
+                        allPatients[index] = { ...allPatients[index], ...fieldsToUpdate };
+                        processPatientData(allPatients); // Manually trigger update
                     }
                 } else {
                     const patientDocRef = doc(db, `artifacts/${appId}/public/data/patients`, patientId);
@@ -1048,26 +1071,6 @@
             }
         }
 
-        /**
-         * Utility to create mock patient data (for mock DB mode).
-         */
-        function createMockPatient(name, priority, complaint, paramedic) {
-            return {
-                id: crypto.randomUUID(),
-                name: name,
-                dob: '1985-01-15',
-                complaint: complaint,
-                bpm: Math.floor(Math.random() * (120 - 60 + 1)) + 60,
-                bp: `${Math.floor(Math.random() * (140 - 90 + 1)) + 90}/${Math.floor(Math.random() * (90 - 60 + 1)) + 60}`,
-                paramedic: paramedic,
-                priority: priority,
-                status: 'receiving',
-                area: null,
-                notes: '',
-                entryTime: new Date(Date.now() - Math.floor(Math.random() * 3600000)), // up to 1 hour ago
-                submittedBy: 'System',
-            };
-        }
 
         // --- Patient Card Rendering ---
 
@@ -1086,6 +1089,7 @@
             const timeField = isArchive ? langContent.time.replace('Archived:', '').trim() : langContent.time.replace(/Time at Station:|Time:/, '').trim();
             const timeValue = isArchive ? (patient.dischargeTime ? new Date(patient.dischargeTime).toLocaleString() : 'N/A') : formatTimeSince(isStation ? patient.stationTime : patient.entryTime);
             
+            // 1. Details specific to Station view (Assigned Staff and Notes)
             const staffNotesHtml = isStation ? `
                 <div class="mt-3 pt-3 border-t border-gray-100 space-y-2">
                     <div class="text-sm font-semibold text-gray-700">
@@ -1096,24 +1100,33 @@
                         <span class="font-semibold text-gray-700">${langContent.notes}</span> ${patient.notes || 'No notes added.'}
                     </p>
                 </div>
-                <div class="flex justify-end mt-4">
-                    <button onclick="window.openStaffNotesModal('${patient.id}', '${patient.name}', '${patient.assignedStaff || ''}', '${patient.notes || ''}')" class="text-xs font-medium px-3 py-1 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition duration-200 flex items-center">
-                        <span data-lucide="clipboard-edit" class="w-4 h-4 mr-1"></span> ${langContent.updateBtn}
+            ` : '';
+
+
+            // 2. Action buttons based on status
+            let actionButtonHtml = '';
+
+            if (isReceiving) {
+                actionButtonHtml = `
+                    <button onclick="window.openAreaAssignmentModal('${patient.id}', '${patient.name}')" class="w-full sm:w-auto bg-red-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-700 transition duration-200 flex items-center justify-center shadow-md">
+                        <span data-lucide="chevrons-right" class="w-5 h-5 mr-2"></span> ${langContent.receiveBtn}
                     </button>
-                </div>
-            ` : '';
+                `;
+            } else if (isStation) {
+                // FIX: Added the missing release button and combined it with the update button
+                actionButtonHtml = `
+                    <div class="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-4">
+                        <button onclick="window.openStaffNotesModal('${patient.id}', '${patient.name}', '${patient.assignedStaff || ''}', '${patient.notes || ''}')" class="text-xs font-medium px-3 py-2 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition duration-200 flex items-center justify-center">
+                            <span data-lucide="clipboard-edit" class="w-4 h-4 mr-1"></span> ${langContent.updateBtn}
+                        </button>
+                        <button onclick="window.openDischargeModal('${patient.id}', '${patient.name}')" class="w-full sm:w-auto bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-200 flex items-center justify-center shadow-md">
+                            <span data-lucide="archive" class="w-5 h-5 mr-2"></span> ${langContent.releaseBtn}
+                        </button>
+                    </div>
+                `;
+            }
 
-
-            const actionButtonHtml = isReceiving ? `
-                <button onclick="window.openAreaAssignmentModal('${patient.id}', '${patient.name}')" class="w-full sm:w-auto bg-red-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-700 transition duration-200 flex items-center justify-center shadow-md">
-                    <span data-lucide="chevrons-right" class="w-5 h-5 mr-2"></span> ${langContent.receiveBtn}
-                </button>
-            ` : isStation ? `
-                <button onclick="window.openDischargeModal('${patient.id}', '${patient.name}')" class="w-full sm:w-auto bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-200 flex items-center justify-center shadow-md">
-                    <span data-lucide="archive" class="w-5 h-5 mr-2"></span> ${langContent.releaseBtn}
-                </button>
-            ` : '';
-
+            // 3. Archive specific details
             const archiveDetailsHtml = isArchive ? `
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-500 mt-3 pt-3 border-t border-gray-100">
                     <div><span class="font-medium">${langContent.dischargedBy}</span> ${patient.dischargedBy || 'N/A'}</div>
@@ -1150,8 +1163,10 @@
                     ${staffNotesHtml}
                     ${archiveDetailsHtml}
                     
-                    <!-- Action Button (only for receiving and archive) -->
-                    ${!isStation ? `<div class="mt-4 flex justify-end">${actionButtonHtml}</div>` : ''}
+                    <!-- Action Button Container -->
+                    <div class="mt-4 flex justify-end">
+                        ${actionButtonHtml}
+                    </div>
                 </div>
             `;
         }
@@ -1384,9 +1399,18 @@
             const maxCapacity = CAPACITIES[targetArea];
 
             if (currentCount >= maxCapacity) {
-                alert(`Cannot move patient: ${targetArea.toUpperCase()} capacity is full (${maxCapacity} / ${maxCapacity}).`);
+                const areaName = targetArea === 'icu' ? dictionary[currentState.language].station.icu.heading : dictionary[currentState.language].station.recovery.heading;
+                
+                // Using a custom alert/message box instead of window.alert
+                const langContent = dictionary[currentState.language].modal;
+                const message = `Cannot move patient: ${areaName} capacity is full (${maxCapacity} / ${maxCapacity}).`;
+                
+                // Simple implementation: fall back to console log and reset button
+                console.error(message);
+                
                 confirmBtn.disabled = false;
                 confirmBtn.textContent = originalText;
+                // Note: For production use, this would require a custom UI modal.
                 return;
             }
 
@@ -1452,7 +1476,7 @@
 
             if (success) {
                 window.closeModal('staff-notes-modal');
-                render(); // Force re-render just to be sure, although onSnapshot should handle it
+                // render() is called automatically via onSnapshot update, no need to force it.
             } else {
                 console.error("Staff/Notes update failed.");
             }
@@ -1476,10 +1500,6 @@
             getEl('discharge-form').addEventListener('submit', handleDischargeSubmit);
             getEl('area-assignment-form').addEventListener('submit', handleAreaAssignmentSubmit);
             getEl('staff-notes-form').addEventListener('submit', handleStaffNotesSubmit);
-            
-            // Prevent contact form submission
-            const contactForm = getEl('tab-contact').querySelector('form');
-            contactForm.addEventListener('submit', (e) => { e.preventDefault(); console.log("Contact Message Sent (Simulated)"); }); 
         };
 
     </script>
